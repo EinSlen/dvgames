@@ -52,7 +52,7 @@ export class UI {
         const screen = document.createElement('div');
         screen.id = 'start-screen';
         screen.innerHTML = `
-            <h1>MiniCraft 3D</h1>
+            <h1>BelgiCraft</h1>
             <div class="menu-section">
                 <input type="text" id="player-name" placeholder="Ton pseudo" maxlength="16" value="Steve">
             </div>

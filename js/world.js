@@ -19,11 +19,11 @@ const FACES = [
 
 // UV atlas
 const ATLAS_COLS = 8, ATLAS_ROWS = 4;
-const TEX_IDS = { GRASS_TOP:0,GRASS_SIDE:1,DIRT:2,STONE:3,SAND:4,WOOD_SIDE:5,WOOD_TOP:6,LEAVES:7,WATER:8,BEDROCK:9,SNOW_TOP:10,COBBLESTONE:11,COAL_ORE:12,IRON_ORE:13,PLANKS:14,GLASS:15,BRICK:16,SNOW_SIDE:17 };
 const BFACES = [];
 BFACES[1]=[0,2,1]; BFACES[2]=[2,2,2]; BFACES[3]=[3,3,3]; BFACES[4]=[4,4,4]; BFACES[5]=[8,8,8];
 BFACES[6]=[6,6,5]; BFACES[7]=[7,7,7]; BFACES[8]=[9,9,9]; BFACES[9]=[12,12,12]; BFACES[10]=[13,13,13];
 BFACES[11]=[10,2,17]; BFACES[12]=[11,11,11]; BFACES[13]=[14,14,14]; BFACES[14]=[15,15,15]; BFACES[15]=[16,16,16];
+BFACES[16]=[18,18,18]; BFACES[17]=[19,19,19]; // frites, friterie
 
 function getTexIdx(bt, faceDir) {
     const f = BFACES[bt];
@@ -153,6 +153,72 @@ export class World {
         return (s & 0x7fffffff) / 0x7fffffff;
     }
 
+    _placeFriterie(bl, x, y, z) {
+        const s = (lx, lz, ly, bt) => {
+            if (lx >= 0 && lx < CS && lz >= 0 && lz < CS && ly >= 0 && ly < CH)
+                bl[lx + lz * CS + ly * CS2] = bt;
+        };
+        const FRIT = 17, BELG = 15, FRITES = 16, PLANK = 13, GLASS = 14, COBBLE = 12, STONE = 3;
+
+        // 7x5 footprint, facing +Z
+        // Floor: cobblestone
+        for (let dx = -3; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++)
+            s(x+dx, z+dz, y, COBBLE);
+
+        // Back wall (dz = -2): belgique bricks, 3 blocks high
+        for (let dx = -3; dx <= 3; dx++) for (let dy = 1; dy <= 3; dy++)
+            s(x+dx, z-2, y+dy, BELG);
+
+        // Side walls (dx = -3 and dx = 3)
+        for (let dz = -1; dz <= 2; dz++) for (let dy = 1; dy <= 3; dy++) {
+            s(x-3, z+dz, y+dy, BELG);
+            s(x+3, z+dz, y+dy, BELG);
+        }
+
+        // Counter along front (dz = 2): friterie blocks
+        for (let dx = -2; dx <= 2; dx++)
+            s(x+dx, z+2, y+1, FRIT);
+
+        // Frites on the counter
+        s(x-1, z+2, y+2, FRITES);
+        s(x+1, z+2, y+2, FRITES);
+
+        // Sauce pots on counter (colored glass = ketchup, cobble = mayo)
+        s(x, z+2, y+2, GLASS);  // mayo (white-ish)
+
+        // Menu board above counter (planks)
+        for (let dx = -2; dx <= 2; dx++)
+            s(x+dx, z+2, y+3, PLANK);
+
+        // Glass window above counter
+        for (let dx = -1; dx <= 1; dx++)
+            s(x+dx, z+1, y+2, GLASS);
+
+        // Roof: friterie blocks
+        for (let dx = -3; dx <= 3; dx++) for (let dz = -2; dz <= 2; dz++)
+            s(x+dx, z+dz, y+4, FRIT);
+
+        // Overhang on front
+        for (let dx = -3; dx <= 3; dx++)
+            s(x+dx, z+3, y+4, FRIT);
+
+        // Fryer inside (stone blocks = fryers)
+        s(x-1, z-1, y+1, STONE);
+        s(x+1, z-1, y+1, STONE);
+
+        // Frites baskets on fryers
+        s(x-1, z-1, y+2, FRITES);
+        s(x+1, z-1, y+2, FRITES);
+
+        // Floor mat in front
+        for (let dx = -2; dx <= 2; dx++)
+            s(x+dx, z+3, y, PLANK);
+
+        // Mark position for NPC vendor spawn
+        this._friterieVendors = this._friterieVendors || [];
+        this._friterieVendors.push({ wx: x + this._currentChunkOX, y: y + 1, wz: z + this._currentChunkOZ });
+    }
+
     getHeight(wx, wz) {
         // Biome blend: plains vs hills
         const biome = this.noise.noise2D(wx * 0.003, wz * 0.003); // -1 to 1
@@ -180,6 +246,8 @@ export class World {
     generateTerrain(chunk) {
         const { cx, cz } = chunk;
         const ox = cx * CS, oz = cz * CS, bl = chunk.blocks;
+        this._currentChunkOX = ox;
+        this._currentChunkOZ = oz;
 
         for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
             const wx = ox + lx, wz = oz + lz;
@@ -240,8 +308,16 @@ export class World {
             }
         }
 
-        // Flowers/tall grass in plains (using leaves blocks as decoration)
-        // Skipped for performance
+        // Friteries — spawn rarely in plains
+        for (let lx = 4; lx < CS-4; lx++) for (let lz = 4; lz < CS-4; lz++) {
+            const wx = ox+lx, wz = oz+lz;
+            if (this._srand(wx*3, wz*3) > 0.995) { // very rare
+                const h = this.getHeight(wx, wz);
+                if (h > SEA_LEVEL+2 && this.getBiome(wx, wz) === 'plains' && bl[lx+lz*CS+h*CS2] === 1) {
+                    this._placeFriterie(bl, lx, h+1, lz);
+                }
+            }
+        }
 
         chunk.generated = true;
 

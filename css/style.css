@@ -21,26 +21,26 @@ body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-
     background: rgba(0,0,0,0.75); display: flex; flex-direction: column;
     align-items: center; justify-content: center; color: #fff; pointer-events: auto;
 }
-#start-screen h1 { font-size: 48px; margin-bottom: 20px; color: #6abf4b; text-shadow: 3px 3px 6px rgba(0,0,0,0.8); letter-spacing: 3px; }
+#start-screen h1 { font-size: 48px; margin-bottom: 20px; color: #fdda24; text-shadow: 3px 3px 6px rgba(0,0,0,0.8); letter-spacing: 3px; }
 
 .menu-section { margin-bottom: 15px; }
 #player-name {
-    padding: 10px 16px; font-size: 16px; border: 2px solid #6abf4b; border-radius: 6px;
+    padding: 10px 16px; font-size: 16px; border: 2px solid #fdda24; border-radius: 6px;
     background: rgba(0,0,0,0.5); color: #fff; text-align: center; width: 220px; outline: none;
 }
-#player-name:focus { border-color: #8fd66b; }
+#player-name:focus { border-color: #ffe55a; }
 
 .menu-buttons { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 15px; }
 .menu-buttons button {
     padding: 12px 28px; font-size: 16px; border: none; border-radius: 6px;
     cursor: pointer; font-weight: bold; min-width: 220px; transition: all 0.15s;
 }
-#btn-solo { background: #6abf4b; color: #fff; }
-#btn-solo:hover { background: #7dd65c; transform: scale(1.03); }
-#btn-host { background: #3498db; color: #fff; }
-#btn-host:hover { background: #52aee6; transform: scale(1.03); }
-#btn-join { background: #e67e22; color: #fff; padding: 12px 20px; min-width: 110px; }
-#btn-join:hover { background: #f0983a; transform: scale(1.03); }
+#btn-solo { background: #2d2d2d; color: #fdda24; border: 2px solid #fdda24; }
+#btn-solo:hover { background: #fdda24; color: #000; transform: scale(1.03); }
+#btn-host { background: #c8102e; color: #fff; }
+#btn-host:hover { background: #e02040; transform: scale(1.03); }
+#btn-join { background: #fdda24; color: #000; font-weight: bold; padding: 12px 20px; min-width: 110px; }
+#btn-join:hover { background: #ffe55a; transform: scale(1.03); }
 
 .join-row { display: flex; gap: 8px; align-items: center; }
 #room-code-input {
@@ -53,7 +53,7 @@ body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-
 #menu-status { color: #f1c40f; font-size: 14px; min-height: 20px; margin-bottom: 10px; }
 
 .controls-info { background: rgba(0,0,0,0.4); padding: 14px 24px; border-radius: 8px; font-size: 13px; line-height: 1.9; }
-.controls-info b { color: #6abf4b; }
+.controls-info b { color: #fdda24; }
 
 /* Room info (during gameplay) */
 #room-info {

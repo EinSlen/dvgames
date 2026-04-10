@@ -36,7 +36,7 @@ export class Player {
         this.breakCooldown = 0;
         this.placeCooldown = 0;
         this.attackCooldown = 0;
-        this.hotbar = [1, 2, 3, 12, 13, 6, 7, 4, 14]; // block type IDs
+        this.hotbar = [1, 3, 16, 17, 15, 11, 6, 13, 14]; // grass,stone,frites,friterie,belgique,gaufre,wood,planks,glass
         this.selectedSlot = 0;
 
         // Progressive breaking

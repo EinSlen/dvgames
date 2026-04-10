@@ -4,6 +4,7 @@ export const BlockType = {
     AIR: 0, GRASS: 1, DIRT: 2, STONE: 3, SAND: 4, WATER: 5,
     WOOD: 6, LEAVES: 7, BEDROCK: 8, COAL_ORE: 9, IRON_ORE: 10,
     SNOW: 11, COBBLESTONE: 12, PLANKS: 13, GLASS: 14, BRICK: 15,
+    FRITES: 16, FRITERIE: 17,
 };
 
 export const BlockProps = {
@@ -18,15 +19,16 @@ export const BlockProps = {
     [BlockType.BEDROCK]:     { name: 'Bedrock',     solid: true,  transparent: false },
     [BlockType.COAL_ORE]:    { name: 'Coal Ore',     solid: true,  transparent: false },
     [BlockType.IRON_ORE]:    { name: 'Iron Ore',     solid: true,  transparent: false },
-    [BlockType.SNOW]:        { name: 'Snow',         solid: true,  transparent: false },
+    [BlockType.SNOW]:        { name: 'Gaufre',       solid: true,  transparent: false },
     [BlockType.COBBLESTONE]: { name: 'Cobblestone', solid: true,  transparent: false },
     [BlockType.PLANKS]:      { name: 'Planks',       solid: true,  transparent: false },
     [BlockType.GLASS]:       { name: 'Glass',       solid: true,  transparent: true },
-    [BlockType.BRICK]:       { name: 'Brick',       solid: true,  transparent: false },
+    [BlockType.BRICK]:       { name: 'Belgique',     solid: true,  transparent: false },
+    [BlockType.FRITES]:      { name: 'Frites',       solid: true,  transparent: false },
+    [BlockType.FRITERIE]:    { name: 'Friterie',     solid: true,  transparent: false },
 };
 
-// Pre-computed lookup arrays (indexed by block type)
-const NUM_TYPES = 16;
+const NUM_TYPES = 18;
 export const IS_TRANSPARENT = new Uint8Array(NUM_TYPES);
 export const IS_SOLID = new Uint8Array(NUM_TYPES);
 for (let i = 0; i < NUM_TYPES; i++) {
@@ -39,6 +41,7 @@ const TEX = {
     GRASS_TOP:0, GRASS_SIDE:1, DIRT:2, STONE:3, SAND:4, WOOD_SIDE:5,
     WOOD_TOP:6, LEAVES:7, WATER:8, BEDROCK:9, SNOW_TOP:10, COBBLESTONE:11,
     COAL_ORE:12, IRON_ORE:13, PLANKS:14, GLASS:15, BRICK:16, SNOW_SIDE:17,
+    FRITES:18, FRITERIE:19,
 };
 
 // Block face mapping: [top, bottom, side]
@@ -58,6 +61,8 @@ const blockFaces = {
     [BlockType.PLANKS]:      [TEX.PLANKS, TEX.PLANKS, TEX.PLANKS],
     [BlockType.GLASS]:       [TEX.GLASS, TEX.GLASS, TEX.GLASS],
     [BlockType.BRICK]:       [TEX.BRICK, TEX.BRICK, TEX.BRICK],
+    [BlockType.FRITES]:      [TEX.FRITES, TEX.FRITES, TEX.FRITES],
+    [BlockType.FRITERIE]:    [TEX.FRITERIE, TEX.FRITERIE, TEX.FRITERIE],
 };
 
 const ATLAS_COLS = 8;
@@ -165,9 +170,13 @@ export function createTextureAtlas() {
     [ox,oy] = texOrigin(TEX.BEDROCK); rng = seededRandom(10);
     for (let y=0;y<TEX_SIZE;y++) for (let x=0;x<TEX_SIZE;x++) { const v=30+(rng()*40|0); setP(ox+x,oy+y,v,v,v); }
 
-    // SNOW_TOP
+    // SNOW_TOP — Waffle texture!
     [ox,oy] = texOrigin(TEX.SNOW_TOP); rng = seededRandom(11);
-    for (let y=0;y<TEX_SIZE;y++) for (let x=0;x<TEX_SIZE;x++) { const v=230+(rng()*25|0); setP(ox+x,oy+y,v,v,v); }
+    for (let y=0;y<TEX_SIZE;y++) for (let x=0;x<TEX_SIZE;x++) {
+        const grid = (x % 4 === 0 || y % 4 === 0);
+        if (grid) setP(ox+x,oy+y, 180, 140, 80);     // waffle grid lines
+        else { const v = rng()*20|0; setP(ox+x,oy+y, 220+v, 190+v, 110+v); } // golden waffle
+    }
 
     // COBBLESTONE
     [ox,oy] = texOrigin(TEX.COBBLESTONE); rng = seededRandom(12);
@@ -199,14 +208,14 @@ export function createTextureAtlas() {
         if(x===0||x===15||y===0||y===15) setP(ox+x,oy+y,180,200,220); else setP(ox+x,oy+y,200,220,240);
     }
 
-    // BRICK
+    // BRICK — Belgian flag pattern!
     [ox,oy] = texOrigin(TEX.BRICK); rng = seededRandom(17);
-    for (let y=0;y<TEX_SIZE;y++) for (let x=0;x<TEX_SIZE;x++) setP(ox+x,oy+y,170,170,160);
-    for (let row=0;row<4;row++) { const by=row*4,xo=(row%2)*8;
-        for (let col=-1;col<2;col++) { const bx=col*8+xo;
-            for (let dy=1;dy<4;dy++) for (let dx=1;dx<8;dx++) { const px2=bx+dx,py=by+dy;
-                if(px2>=0&&px2<16&&py>=0&&py<16) { const v=150+(rng()*30|0); setP(ox+px2,oy+py,v,v-50,v-70); }
-    }}}
+    for (let y=0;y<TEX_SIZE;y++) for (let x=0;x<TEX_SIZE;x++) {
+        const v = rng() * 15 | 0;
+        if (x < 5) setP(ox+x,oy+y, 30+v, 30+v, 30+v);           // noir
+        else if (x < 11) setP(ox+x,oy+y, 253, 218+v, 36);        // jaune
+        else setP(ox+x,oy+y, 200+v, 16, 46);                      // rouge
+    }
 
     // SNOW_SIDE
     [ox,oy] = texOrigin(TEX.SNOW_SIDE); rng = seededRandom(18);
@@ -214,6 +223,38 @@ export function createTextureAtlas() {
         if(y<3) { const v=230+(rng()*25|0); setP(ox+x,oy+y,v,v,v); }
         else { const v=100+(rng()*35|0); setP(ox+x,oy+y,v,v-30,v-50); }
     }
+
+    // FRITES — golden fries on red background (cornet de frites)
+    [ox,oy] = texOrigin(TEX.FRITES); rng = seededRandom(19);
+    for (let y=0;y<TEX_SIZE;y++) for (let x=0;x<TEX_SIZE;x++) {
+        // Red cornet background
+        setP(ox+x,oy+y, 200, 40, 40);
+    }
+    // Draw yellow fries sticking up
+    for (let i = 0; i < 7; i++) {
+        const fx = 2 + (rng() * 12 | 0);
+        const fh = 6 + (rng() * 8 | 0);
+        for (let fy = 16 - fh; fy < 16; fy++) {
+            const v = rng() * 30 | 0;
+            if (fx >= 0 && fx < 16 && fy >= 0 && fy < 16)
+                setP(ox+fx, oy+fy, 230+v/2, 190+v, 60+v);
+        }
+    }
+
+    // FRITERIE — white/red striped building block
+    [ox,oy] = texOrigin(TEX.FRITERIE); rng = seededRandom(20);
+    for (let y=0;y<TEX_SIZE;y++) for (let x=0;x<TEX_SIZE;x++) {
+        const stripe = ((y / 4 | 0) % 2 === 0);
+        if (stripe) { const v=rng()*10|0; setP(ox+x,oy+y, 240+v, 240+v, 240+v); } // white
+        else { const v=rng()*15|0; setP(ox+x,oy+y, 200+v, 30+v, 30+v); }           // red
+    }
+    // Window/counter in the middle
+    for (let y=5;y<11;y++) for (let x=3;x<13;x++) {
+        setP(ox+x,oy+y, 60, 40, 20); // dark brown counter
+    }
+    // "FRITES" sign hint (yellow pixels at top)
+    for (let x=2;x<14;x++) setP(ox+x,oy+1, 253, 218, 36);
+    for (let x=2;x<14;x++) setP(ox+x,oy+2, 253, 218, 36);
 
     ctx.putImageData(imageData, 0, 0);
 
