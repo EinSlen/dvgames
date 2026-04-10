@@ -63,9 +63,9 @@ export class World {
         this.treeNoise = new SimplexNoise(seed + 55555);
         this.caveNoise = new SimplexNoise(seed + 11111);
         this.renderDistance = 6;
-        this.loadQueue = [];
-        this.onBlockChange = null; // callback for network sync
-        this.pendingRemoteChanges = []; // changes for chunks not yet loaded
+        this.meshQueue = [];
+        this.onBlockChange = null;
+        this.pendingRemoteChanges = [];
     }
 
     // Integer key (no string alloc in hot paths)
@@ -356,10 +356,13 @@ export class World {
     // Force-load a chunk synchronously (for spawn area)
     forceLoad(cx, cz) {
         const key = this._key(cx, cz);
-        if (this.chunks.has(key)) return;
-        const chunk = new Chunk(cx, cz);
-        this.chunks.set(key, chunk);
-        this.generateTerrain(chunk);
+        let chunk = this.chunks.get(key);
+        if (chunk && chunk.mesh) return;
+        if (!chunk) {
+            chunk = new Chunk(cx, cz);
+            this.chunks.set(key, chunk);
+            this.generateTerrain(chunk);
+        }
         this.buildChunkMesh(chunk);
     }
 
@@ -369,7 +372,7 @@ export class World {
         const pcz = Math.floor(playerZ / CS);
         const rd = this.renderDistance;
 
-        // 1. Queue new chunks
+        // 1. Generate terrain immediately for new chunks (one-time cost)
         for (let dx = -rd; dx <= rd; dx++) {
             for (let dz = -rd; dz <= rd; dz++) {
                 if (dx * dx + dz * dz > rd * rd) continue;
@@ -378,35 +381,35 @@ export class World {
                 if (!this.chunks.has(key)) {
                     const chunk = new Chunk(cx, cz);
                     this.chunks.set(key, chunk);
-                    this.loadQueue.push(chunk);
+                    this.generateTerrain(chunk);
+                    this.meshQueue.push(chunk);
+                    this._markDirty(cx - 1, cz);
+                    this._markDirty(cx + 1, cz);
+                    this._markDirty(cx, cz - 1);
+                    this._markDirty(cx, cz + 1);
                 }
             }
         }
 
-        // 2. Load chunks progressively (terrain + mesh, closest first)
-        if (this.loadQueue.length > 0) {
-            this.loadQueue.sort((a, b) =>
+        // 2. Build meshes progressively (4 per frame)
+        let built = 0;
+        if (this.meshQueue.length > 0) {
+            this.meshQueue.sort((a, b) =>
                 ((a.cx-pcx)**2 + (a.cz-pcz)**2) - ((b.cx-pcx)**2 + (b.cz-pcz)**2)
             );
-            let loaded = 0;
-            while (this.loadQueue.length > 0 && loaded < 3) {
-                const chunk = this.loadQueue.shift();
-                this.generateTerrain(chunk);
+            while (this.meshQueue.length > 0 && built < 4) {
+                const chunk = this.meshQueue.shift();
                 this.buildChunkMesh(chunk);
-                this._markDirty(chunk.cx-1, chunk.cz);
-                this._markDirty(chunk.cx+1, chunk.cz);
-                this._markDirty(chunk.cx, chunk.cz-1);
-                this._markDirty(chunk.cx, chunk.cz+1);
-                loaded++;
+                built++;
             }
         }
 
         // 3. Rebuild dirty chunks
-        let rebuilt = 0;
         for (const chunk of this.chunks.values()) {
-            if (chunk.dirty && chunk.generated && rebuilt < 4) {
+            if (built >= 4) break;
+            if (chunk.dirty && chunk.generated) {
                 this.buildChunkMesh(chunk);
-                rebuilt++;
+                built++;
             }
         }
 
