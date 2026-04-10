@@ -3,6 +3,7 @@ import { BlockProps } from './textures.js';
 export class UI {
     constructor() {
         this.container = document.getElementById('ui');
+        this._blockIconURLs = {};
         this._createCrosshair();
         this._createHotbar();
         this._createDebugInfo();
@@ -32,10 +33,11 @@ export class UI {
         for (let i = 0; i < 9; i++) {
             const slot = document.createElement('div'); slot.className = 'hotbar-slot';
             const label = document.createElement('span'); label.className = 'slot-number'; label.textContent = i + 1;
+            const icon = document.createElement('div'); icon.className = 'slot-icon';
             const name = document.createElement('span'); name.className = 'slot-name';
-            slot.appendChild(label); slot.appendChild(name);
+            slot.appendChild(label); slot.appendChild(icon); slot.appendChild(name);
             bar.appendChild(slot);
-            this.hotbarSlots.push({ slot, name, prevName: '', prevSel: false });
+            this.hotbarSlots.push({ slot, icon, name, prevName: '', prevSel: false, prevBlock: -1 });
         }
         this.container.appendChild(bar);
     }
@@ -109,12 +111,22 @@ export class UI {
     showStartScreen() { this.startScreen.style.display = 'flex'; this.pauseScreen.style.display = 'none'; }
     showPauseScreen() { this.startScreen.style.display = 'none'; this.pauseScreen.style.display = 'flex'; }
 
+    setBlockIcons(iconURLs) {
+        this._blockIconURLs = iconURLs;
+    }
+
     updateHotbar(hotbar, selectedSlot) {
         for (let i = 0; i < 9; i++) {
             const s = this.hotbarSlots[i];
             const sel = i === selectedSlot;
             if (s.prevSel !== sel) { s.slot.className = 'hotbar-slot' + (sel ? ' selected' : ''); s.prevSel = sel; }
-            const p = BlockProps[hotbar[i]]; const n = p ? p.name : '';
+            const bt = hotbar[i];
+            if (s.prevBlock !== bt) {
+                const url = this._blockIconURLs[bt];
+                s.icon.style.backgroundImage = url ? ('url(' + url + ')') : '';
+                s.prevBlock = bt;
+            }
+            const p = BlockProps[bt]; const n = p ? p.name : '';
             if (s.prevName !== n) { s.name.textContent = n; s.prevName = n; }
         }
     }

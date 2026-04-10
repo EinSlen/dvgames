@@ -10,7 +10,8 @@ body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-
 .hotbar-slot { width: 52px; height: 52px; background: rgba(0,0,0,0.6); border: 2px solid rgba(100,100,100,0.6); border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
 .hotbar-slot.selected { border-color: #fff; background: rgba(255,255,255,0.2); }
 .slot-number { position: absolute; top: 2px; left: 4px; font-size: 10px; color: rgba(255,255,255,0.5); }
-.slot-name { font-size: 8px; color: #fff; text-align: center; line-height: 1.1; margin-top: 4px; max-width: 48px; overflow: hidden; }
+.slot-icon { width: 32px; height: 32px; image-rendering: pixelated; image-rendering: crisp-edges; background-size: contain; background-repeat: no-repeat; background-position: center; }
+.slot-name { font-size: 8px; color: #fff; text-align: center; line-height: 1.1; margin-top: 2px; max-width: 48px; overflow: hidden; }
 
 #debug-info { position: absolute; top: 10px; left: 10px; color: #fff; font-size: 13px; font-family: 'Courier New', monospace; text-shadow: 1px 1px 2px rgba(0,0,0,0.9); line-height: 1.5; }
 

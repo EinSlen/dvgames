@@ -33,6 +33,12 @@ export class Player {
         this.hotbar = [1, 2, 3, 12, 13, 6, 7, 4, 14]; // block type IDs
         this.selectedSlot = 0;
 
+        // Progressive breaking
+        this.breakProgress = 0;
+        this.breakStage = -1;     // -1 = not breaking, 0-4 = crack stages
+        this.breakingBlock = null; // {x, y, z}
+        this.didSwing = false;
+
         // Cached vectors (avoid per-frame allocation)
         this._lookDir = new THREE.Vector3();
         this._sinYaw = 0; this._cosYaw = 0;
@@ -181,17 +187,49 @@ export class Player {
     }
 
     _updateBlockInteraction(dt) {
-        this.breakCooldown = Math.max(0, this.breakCooldown - dt);
         this.placeCooldown = Math.max(0, this.placeCooldown - dt);
+        this.didSwing = false;
 
-        if (this.mouseDown.left && this.breakCooldown <= 0 && this.selectedBlock) {
+        // Left click HELD - progressive breaking
+        if (this.mouseDown.left && this.selectedBlock) {
             const { x, y, z } = this.selectedBlock;
             if (this.world.getBlock(x, y, z) !== BlockType.BEDROCK) {
-                this.world.setBlock(x, y, z, BlockType.AIR);
-                this.breakCooldown = 0.25;
+                // Check if targeting same block
+                if (this.breakingBlock &&
+                    this.breakingBlock.x === x &&
+                    this.breakingBlock.y === y &&
+                    this.breakingBlock.z === z) {
+                    // Same block - increment progress
+                    this.breakProgress += dt / 0.3;
+                } else {
+                    // Different block - reset and start fresh
+                    this.breakProgress = 0;
+                    this.breakingBlock = { x, y, z };
+                }
+                this.breakStage = Math.min(4, Math.floor(this.breakProgress * 5));
+
+                if (this.breakProgress >= 1) {
+                    // Break the block
+                    this.world.setBlock(x, y, z, BlockType.AIR);
+                    this.breakProgress = 0;
+                    this.breakStage = -1;
+                    this.breakingBlock = null;
+                    this.didSwing = true;
+                }
+            } else {
+                // Bedrock - reset
+                this.breakProgress = 0;
+                this.breakStage = -1;
+                this.breakingBlock = null;
             }
+        } else if (!this.mouseDown.left) {
+            // Left click released - reset breaking
+            this.breakProgress = 0;
+            this.breakStage = -1;
+            this.breakingBlock = null;
         }
 
+        // Right click - instant placement
         if (this.mouseDown.right && this.placeCooldown <= 0 && this.selectedBlock) {
             const { normalX: nx, normalY: ny, normalZ: nz } = this.selectedBlock;
             const px = this.position.x, py = this.position.y, pz = this.position.z;
@@ -201,6 +239,7 @@ export class Player {
                 if (ny >= 0 && ny < CHUNK_HEIGHT) {
                     this.world.setBlock(nx, ny, nz, this.hotbar[this.selectedSlot]);
                     this.placeCooldown = 0.25;
+                    this.didSwing = true;
                 }
             }
         }

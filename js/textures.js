@@ -217,9 +217,74 @@ export function createTextureAtlas() {
 
     ctx.putImageData(imageData, 0, 0);
 
+    // Store atlas canvas for icon extraction
+    _atlasCanvas = canvas;
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
     texture.colorSpace = THREE.SRGBColorSpace;
     return texture;
+}
+
+// Module-level atlas canvas reference
+let _atlasCanvas = null;
+
+export function getAtlasCanvas() {
+    return _atlasCanvas;
+}
+
+export function getBlockIconURL(blockType) {
+    if (!_atlasCanvas) return '';
+    const faces = blockFaces[blockType];
+    if (!faces) return '';
+    const topTexIdx = faces[0]; // top face
+    const col = topTexIdx % ATLAS_COLS;
+    const row = (topTexIdx / ATLAS_COLS) | 0;
+    const sx = col * TEX_SIZE;
+    const sy = row * TEX_SIZE;
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = 32;
+    tmpCanvas.height = 32;
+    const ctx = tmpCanvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(_atlasCanvas, sx, sy, TEX_SIZE, TEX_SIZE, 0, 0, 32, 32);
+    return tmpCanvas.toDataURL();
+}
+
+export { blockFaces };
+
+export function createCrackTextures() {
+    const textures = [];
+    for (let stage = 0; stage < 5; stage++) {
+        const canvas = document.createElement('canvas');
+        canvas.width = TEX_SIZE;
+        canvas.height = TEX_SIZE;
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, TEX_SIZE, TEX_SIZE);
+        const rng = seededRandom(100 + stage);
+        const numCracks = 2 + stage * 2;
+        ctx.strokeStyle = 'rgba(0, 0, 0, ' + (0.3 + stage * 0.15) + ')';
+        ctx.lineWidth = 1;
+        for (let c = 0; c < numCracks; c++) {
+            ctx.beginPath();
+            let cx = 4 + (rng() * 8) | 0;
+            let cy = 4 + (rng() * 8) | 0;
+            ctx.moveTo(cx, cy);
+            const segments = 2 + ((rng() * 3) | 0);
+            for (let s = 0; s < segments; s++) {
+                cx += ((rng() * 6) | 0) - 3;
+                cy += ((rng() * 6) | 0) - 3;
+                cx = Math.max(0, Math.min(15, cx));
+                cy = Math.max(0, Math.min(15, cy));
+                ctx.lineTo(cx, cy);
+            }
+            ctx.stroke();
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        textures.push(tex);
+    }
+    return textures;
 }
