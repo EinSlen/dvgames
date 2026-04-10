@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { BlockType, BlockProps } from './textures.js';
 import { CHUNK_HEIGHT, SEA_LEVEL } from './world.js';
 
+const WATER_GRAVITY = -6;
+const SWIM_SPEED = 3;
+const SWIM_UP = 5;
+
 const GRAVITY = -25;
 const JUMP_VEL = 9;
 const MOVE_SPEED = 5.5;
@@ -24,6 +28,7 @@ export class Player {
         this.onGround = false;
         this.flying = false;
         this.sprinting = false;
+        this.inWater = false;
         this.keys = {};
         this.mouseDown = { left: false, right: false };
         this.locked = false;
@@ -106,7 +111,16 @@ export class Player {
 
     _updateMovement(dt) {
         const sy = this._sinYaw, cy = this._cosYaw;
-        const speed = this.flying ? FLY_SPEED : (this.sprinting ? SPRINT_SPEED : MOVE_SPEED);
+
+        // Check if player is in water
+        const feetBlock = this.world.getBlock(
+            Math.floor(this.position.x),
+            Math.floor(this.position.y + 0.4),
+            Math.floor(this.position.z)
+        );
+        this.inWater = feetBlock === 5; // WATER
+
+        const speed = this.flying ? FLY_SPEED : (this.inWater ? SWIM_SPEED : (this.sprinting ? SPRINT_SPEED : MOVE_SPEED));
 
         let mx = 0, mz = 0;
         if (this.keys['KeyW']) { mx -= sy; mz -= cy; }
@@ -124,6 +138,12 @@ export class Player {
             this.velocity.y = 0;
             if (this.keys['Space']) this.velocity.y = speed;
             if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) this.velocity.y = -speed;
+        } else if (this.inWater) {
+            // Swimming: reduced gravity, space to swim up, shift to sink
+            this.velocity.y += WATER_GRAVITY * dt;
+            if (this.velocity.y < -3) this.velocity.y = -3; // max sink speed
+            if (this.keys['Space']) this.velocity.y = SWIM_UP;
+            if (this.keys['ShiftLeft'] || this.keys['ShiftRight']) this.velocity.y = -SWIM_UP;
         } else {
             this.velocity.y += GRAVITY * dt;
             if (this.keys['Space'] && this.onGround) { this.velocity.y = JUMP_VEL; this.onGround = false; }

@@ -54,7 +54,7 @@ export class World {
         this.noise = new SimplexNoise(seed);
         this.treeNoise = new SimplexNoise(seed + 55555);
         this.caveNoise = new SimplexNoise(seed + 11111);
-        this.renderDistance = 6;
+        this.renderDistance = 4;
         this.meshQueue = [];
         this.onBlockChange = null;
         this.pendingRemoteChanges = [];
@@ -87,6 +87,62 @@ export class World {
         if (lz === 0) this._markDirty(cx, cz-1);
         if (lz === CS-1) this._markDirty(cx, cz+1);
         if (!fromNetwork && this.onBlockChange) this.onBlockChange(wx, wy, wz, type);
+
+        // Gravity: check all neighbors for unsupported sand
+        this._updateNeighborGravity(wx, wy, wz, fromNetwork);
+    }
+
+    _updateNeighborGravity(wx, wy, wz, fromNetwork) {
+        // Check above + 4 sides for sand that needs to fall
+        this._applyGravity(wx, wy + 1, wz, fromNetwork);
+        this._applyGravity(wx + 1, wy, wz, fromNetwork);
+        this._applyGravity(wx - 1, wy, wz, fromNetwork);
+        this._applyGravity(wx, wy, wz + 1, fromNetwork);
+        this._applyGravity(wx, wy, wz - 1, fromNetwork);
+        // Also check the placed block itself (sand placed in air)
+        this._applyGravity(wx, wy, wz, fromNetwork);
+    }
+
+    _applyGravity(wx, wy, wz, fromNetwork) {
+        const b = this.getBlock(wx, wy, wz);
+        if (b !== 4) return; // 4 = SAND only
+
+        // Check if block below is air or water
+        const below = this.getBlock(wx, wy - 1, wz);
+        if (below !== 0 && below !== 5) return; // supported, don't fall
+
+        // Find landing position
+        let landY = wy - 1;
+        while (landY > 0) {
+            const lb = this.getBlock(wx, landY, wz);
+            if (lb !== 0 && lb !== 5) break; // hit solid
+            landY--;
+        }
+        landY++; // one above solid
+
+        if (landY < wy) {
+            // Move sand down (avoid recursive setBlock triggering more gravity)
+            const cx1 = Math.floor(wx / CS), cz1 = Math.floor(wz / CS);
+            const ch1 = this.getChunk(cx1, cz1);
+            if (!ch1 || !ch1.generated) return;
+            const lx = ((wx % CS) + CS) % CS, lz = ((wz % CS) + CS) % CS;
+            // Remove from old position
+            ch1.blocks[lx + lz * CS + wy * CS2] = 0;
+            // Place at new position
+            const cx2 = Math.floor(wx / CS), cz2 = Math.floor(wz / CS);
+            const ch2 = this.getChunk(cx2, cz2);
+            if (ch2 && ch2.generated) {
+                ch2.blocks[lx + lz * CS + landY * CS2] = 4;
+                ch2.dirty = true;
+            }
+            ch1.dirty = true;
+            if (!fromNetwork && this.onBlockChange) {
+                this.onBlockChange(wx, wy, wz, 0);
+                this.onBlockChange(wx, landY, wz, 4);
+            }
+            // Check above for more sand
+            this._applyGravity(wx, wy + 1, wz, fromNetwork);
+        }
     }
 
     _markDirty(cx, cz) { const c = this.getChunk(cx, cz); if (c) c.dirty = true; }
@@ -221,6 +277,10 @@ export class World {
             g.setIndex(new THREE.BufferAttribute(idx, 1));
             chunk.mesh = new THREE.Mesh(g, this.material);
             this.scene.add(chunk.mesh);
+
+            if (g > 1 && new Uint8Array(si * 6)) {
+                g.setIndex(new THREE.BufferGeometry(idx))
+            }
         }
 
         if (wi > 0) {
@@ -241,8 +301,9 @@ export class World {
     forceLoad(cx, cz) {
         const key = this._key(cx, cz);
         let ch = this.chunks.get(key);
-        if (ch && ch.mesh) return;
-        if (!ch) { ch = new Chunk(cx, cz); this.chunks.set(key, ch); this.generateTerrain(ch); }
+        if (ch && ch.generated && ch.mesh) return;
+        if (!ch) { ch = new Chunk(cx, cz); this.chunks.set(key, ch); }
+        if (!ch.generated) this.generateTerrain(ch);
         this.buildChunkMesh(ch);
     }
 

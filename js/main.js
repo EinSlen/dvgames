@@ -131,39 +131,36 @@ class Game {
     }
 
     _initRenderer() {
-        this.renderer = new THREE.WebGLRenderer({ antialias: false });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.setPixelRatio(window.devicePixelRatio);
+        this.renderer = new THREE.WebGLRenderer({ antialias: false, precision: 'lowp', powerPreference: 'high-performance' });
+        // Half resolution = 4x less pixels to render
+        this.renderer.setSize(window.innerWidth / 2, window.innerHeight / 2);
+        this.renderer.domElement.style.width = '100%';
+        this.renderer.domElement.style.height = '100%';
+        this.renderer.domElement.style.imageRendering = 'pixelated';
+        this.renderer.setPixelRatio(1);
         this.renderer.setClearColor(0x87CEEB);
-        this.renderer.autoClear = false;
+        // Single render pass (viewmodel attached to camera)
         document.getElementById('game').appendChild(this.renderer.domElement);
         window.addEventListener('resize', () => {
             const w = window.innerWidth, h = window.innerHeight;
             this.camera.aspect = w / h;
             this.camera.updateProjectionMatrix();
-            if (this.vmCamera) {
-                this.vmCamera.aspect = w / h;
-                this.vmCamera.updateProjectionMatrix();
-            }
-            this.renderer.setSize(w, h);
+            this.renderer.setSize(w / 2, h / 2);
         });
     }
 
     _initScene() {
         this.scene = new THREE.Scene();
-        this.scene.fog = new THREE.Fog(0x87CEEB, 60, 110);
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 200);
-        this.scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
-        sun.position.set(50, 100, 30);
-        this.scene.add(sun);
+        this.scene.fog = new THREE.Fog(0x87CEEB, 40, 70);
+        this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 80);
+        // No lights — MeshBasicMaterial doesn't need them
     }
 
     _initMaterials() {
         const atlas = createTextureAtlas();
         this.atlas = atlas;
-        this.material = new THREE.MeshLambertMaterial({ map: atlas, side: THREE.FrontSide });
-        this.waterMaterial = new THREE.MeshLambertMaterial({ map: atlas, side: THREE.FrontSide, transparent: true, opacity: 0.7 });
+        this.material = new THREE.MeshBasicMaterial({ map: atlas, side: THREE.FrontSide });
+        this.waterMaterial = new THREE.MeshBasicMaterial({ map: atlas, side: THREE.FrontSide, transparent: true, opacity: 0.6 });
 
         // Generate block icons for hotbar
         this._blockIconURLs = {};
@@ -209,51 +206,17 @@ class Game {
     }
 
     _initViewmodel() {
-        // Viewmodel scene (no fog)
-        this.vmScene = new THREE.Scene();
-        this.vmCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 2);
+        // Just a floating block attached to the camera — minimal, no arm
+        const heldMat = new THREE.MeshBasicMaterial({ map: this.atlas, side: THREE.DoubleSide, depthTest: false, fog: false });
+        this.heldBlockMesh = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.13, 0.13), heldMat);
+        this.heldBlockMesh.position.set(0.32, -0.25, -0.45);
+        this.heldBlockMesh.rotation.set(0.2, 0.7, 0);
+        this.heldBlockMesh.renderOrder = 999;
+        this.camera.add(this.heldBlockMesh);
+        this.scene.add(this.camera);
 
-        // Lighting for viewmodel
-        this.vmScene.add(new THREE.AmbientLight(0xffffff, 0.7));
-        const vmSun = new THREE.DirectionalLight(0xffffff, 0.8);
-        vmSun.position.set(1, 2, 1);
-        this.vmScene.add(vmSun);
-
-        const skinMat = new THREE.MeshBasicMaterial({ color: 0xc8a882 });
-
-        this.vmArmGroup = new THREE.Group();
-        this.vmArmGroup.position.set(0.35, -0.45, -0.55);
-        this.vmArmGroup.rotation.set(-0.5, -0.3, 0.1);
-
-        // Arm
-        const arm = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.4, 0.1), skinMat);
-        arm.position.set(0, 0.05, 0);
-        this.vmArmGroup.add(arm);
-
-        // Hand
-        const hand = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.08, 0.12), skinMat);
-        hand.position.set(0, -0.17, 0.02);
-        this.vmArmGroup.add(hand);
-
-        // Held block — on top of hand
-        const heldMat = new THREE.MeshBasicMaterial({ map: this.atlas, side: THREE.DoubleSide });
-        this.heldBlockMesh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 0.14), heldMat);
-        this.heldBlockMesh.position.set(0, 0.32, -0.04);
-        this.heldBlockMesh.rotation.set(0.2, 0.5, 0);
-        this.vmArmGroup.add(this.heldBlockMesh);
-
-        this.vmScene.add(this.vmArmGroup);
-
-        this.vmScene.add(this.vmArmGroup);
-
-        // Animation state
-        this._swingTime = -1;
-        this._swingDuration = 0.25;
-        this._idleTime = 0;
         this._lastSelectedSlot = -1;
-
-        // Set initial held block UVs
-        this._updateHeldBlockUVs(1); // default to GRASS
+        this._updateHeldBlockUVs(1);
     }
 
     _updateHeldBlockUVs(blockType) {
@@ -296,32 +259,11 @@ class Game {
     }
 
     _updateViewmodel(dt) {
-        if (!this.vmArmGroup || !this.player) return;
-
-        // Update held block when slot changes
+        if (!this.heldBlockMesh || !this.player) return;
         const slot = this.player.selectedSlot;
         if (slot !== this._lastSelectedSlot) {
             this._lastSelectedSlot = slot;
             this._updateHeldBlockUVs(this.player.hotbar[slot]);
-        }
-
-        // Swing animation
-        if (this.player.didSwing && this._swingTime < 0) {
-            this._swingTime = 0;
-        }
-
-        if (this._swingTime >= 0) {
-            this._swingTime += dt;
-            const progress = this._swingTime / this._swingDuration;
-            if (progress >= 1) {
-                this._swingTime = -1;
-                this.vmArmGroup.rotation.x = 0;
-            } else {
-                this.vmArmGroup.rotation.x = Math.sin(progress * Math.PI) * 0.5;
-            }
-        } else {
-            this._idleTime += dt;
-            this.vmArmGroup.position.y = -0.45 + Math.sin(this._idleTime * 1.5) * 0.005;
         }
     }
 
@@ -339,7 +281,6 @@ class Game {
             for (let dz = -1; dz <= 1; dz++)
                 this.world.forceLoad(scx + dx, scz + dz);
 
-        // Initialize viewmodel and crack overlay
         this._initViewmodel();
         this._initCrackOverlay();
 
@@ -436,10 +377,7 @@ class Game {
 
         this.ui.updateHotbar(this.player.hotbar, this.player.selectedSlot);
 
-        this.renderer.clear();
         this.renderer.render(this.scene, this.camera);
-        this.renderer.clearDepth();
-        this.renderer.render(this.vmScene, this.vmCamera);
 
         this.ui.updateDebug(this.fps, this.player, sb, this.world.chunks.size);
     }
