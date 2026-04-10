@@ -132,12 +132,8 @@ class Game {
     }
 
     _initRenderer() {
-        this.renderer = new THREE.WebGLRenderer({ antialias: false, precision: 'lowp', powerPreference: 'high-performance' });
-        // Half resolution = 4x less pixels to render
-        this.renderer.setSize(window.innerWidth / 2, window.innerHeight / 2);
-        this.renderer.domElement.style.width = '100%';
-        this.renderer.domElement.style.height = '100%';
-        this.renderer.domElement.style.imageRendering = 'pixelated';
+        this.renderer = new THREE.WebGLRenderer({ antialias: false });
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.setPixelRatio(1);
         this.renderer.setClearColor(0x87CEEB);
         // Single render pass (viewmodel attached to camera)
@@ -146,7 +142,7 @@ class Game {
             const w = window.innerWidth, h = window.innerHeight;
             this.camera.aspect = w / h;
             this.camera.updateProjectionMatrix();
-            this.renderer.setSize(w / 2, h / 2);
+            this.renderer.setSize(w, h);
         });
     }
 
