@@ -1,57 +1,49 @@
 import * as THREE from 'three';
 import { SimplexNoise } from './noise.js';
-import { BlockType, IS_TRANSPARENT, UV_TABLE } from './textures.js';
+import { BlockType, BlockProps } from './textures.js';
 
 export const CHUNK_SIZE = 16;
 export const CHUNK_HEIGHT = 128;
 export const SEA_LEVEL = 38;
-const BASE_HEIGHT = 40;
-const CS = CHUNK_SIZE;
-const CH = CHUNK_HEIGHT;
-const CS2 = CS * CS;
 
-// ── Static face data (flattened for cache-friendly access) ──
+const CS = 16, CH = 128, CS2 = 256;
 
-// 6 faces × 4 verts × 3 coords = 72
-const FVERT = new Float32Array([
-    0,1,0, 1,1,0, 1,1,1, 0,1,1,   // Top +Y
-    0,0,1, 1,0,1, 1,0,0, 0,0,0,   // Bottom -Y
-    1,1,0, 0,1,0, 0,0,0, 1,0,0,   // North -Z
-    0,1,1, 1,1,1, 1,0,1, 0,0,1,   // South +Z
-    0,1,0, 0,1,1, 0,0,1, 0,0,0,   // West -X
-    1,1,1, 1,1,0, 1,0,0, 1,0,1,   // East +X
-]);
+const FACES = [
+    { dir: [0,1,0],  corners: [[0,1,0,0,0],[1,1,0,1,0],[1,1,1,1,1],[0,1,1,0,1]] },
+    { dir: [0,-1,0], corners: [[0,0,1,0,0],[1,0,1,1,0],[1,0,0,1,1],[0,0,0,0,1]] },
+    { dir: [0,0,-1], corners: [[1,1,0,0,1],[0,1,0,1,1],[0,0,0,1,0],[1,0,0,0,0]] },
+    { dir: [0,0,1],  corners: [[0,1,1,0,1],[1,1,1,1,1],[1,0,1,1,0],[0,0,1,0,0]] },
+    { dir: [-1,0,0], corners: [[0,1,0,0,1],[0,1,1,1,1],[0,0,1,1,0],[0,0,0,0,0]] },
+    { dir: [1,0,0],  corners: [[1,1,1,0,1],[1,1,0,1,1],[1,0,0,1,0],[1,0,1,0,0]] },
+];
 
-// 6 faces × 3 = 18
-const FNORM = new Float32Array([0,1,0, 0,-1,0, 0,0,-1, 0,0,1, -1,0,0, 1,0,0]);
+// UV atlas
+const ATLAS_COLS = 8, ATLAS_ROWS = 4;
+const TEX_IDS = { GRASS_TOP:0,GRASS_SIDE:1,DIRT:2,STONE:3,SAND:4,WOOD_SIDE:5,WOOD_TOP:6,LEAVES:7,WATER:8,BEDROCK:9,SNOW_TOP:10,COBBLESTONE:11,COAL_ORE:12,IRON_ORE:13,PLANKS:14,GLASS:15,BRICK:16,SNOW_SIDE:17 };
+const BFACES = [];
+BFACES[1]=[0,2,1]; BFACES[2]=[2,2,2]; BFACES[3]=[3,3,3]; BFACES[4]=[4,4,4]; BFACES[5]=[8,8,8];
+BFACES[6]=[6,6,5]; BFACES[7]=[7,7,7]; BFACES[8]=[9,9,9]; BFACES[9]=[12,12,12]; BFACES[10]=[13,13,13];
+BFACES[11]=[10,2,17]; BFACES[12]=[11,11,11]; BFACES[13]=[14,14,14]; BFACES[14]=[15,15,15]; BFACES[15]=[16,16,16];
 
-// Neighbor offsets per face
-const FDIR_X = new Int8Array([0, 0, 0, 0,-1, 1]);
-const FDIR_Y = new Int8Array([1,-1, 0, 0, 0, 0]);
-const FDIR_Z = new Int8Array([0, 0,-1, 1, 0, 0]);
+function getTexIdx(bt, faceDir) {
+    const f = BFACES[bt];
+    return f ? f[faceDir < 2 ? faceDir : 2] : 0;
+}
 
-// 6 faces × 4 verts × 2 uv = 48
-const FUV = new Float32Array([
-    0,0,1,0,1,1,0,1, 0,0,1,0,1,1,0,1,
-    0,1,1,1,1,0,0,0, 0,1,1,1,1,0,0,0,
-    0,1,1,1,1,0,0,0, 0,1,1,1,1,0,0,0,
-]);
+function getUV(ti) {
+    const c = ti % ATLAS_COLS, r = (ti / ATLAS_COLS) | 0;
+    return [c / ATLAS_COLS, 1 - (r + 1) / ATLAS_ROWS, (c + 1) / ATLAS_COLS, 1 - r / ATLAS_ROWS];
+}
 
-// ── Chunk ──
 class Chunk {
     constructor(cx, cz) {
-        this.cx = cx;
-        this.cz = cz;
+        this.cx = cx; this.cz = cz;
         this.blocks = new Uint8Array(CS * CH * CS);
-        this.mesh = null;
-        this.waterMesh = null;
-        this.dirty = true;
-        this.generated = false;
-        this.maxY = 0;
+        this.mesh = null; this.waterMesh = null;
+        this.dirty = true; this.generated = false;
     }
 }
 
-// ── World ──
 export class World {
     constructor(scene, material, waterMaterial, seed = 12345) {
         this.scene = scene;
@@ -68,388 +60,244 @@ export class World {
         this.pendingRemoteChanges = [];
     }
 
-    // Integer key (no string alloc in hot paths)
-    _key(cx, cz) { return (cx + 32768) * 65536 + (cz + 32768); }
+    _key(cx, cz) { return cx + ',' + cz; }
     getChunk(cx, cz) { return this.chunks.get(this._key(cx, cz)); }
 
     getBlock(wx, wy, wz) {
         if (wy < 0 || wy >= CH) return 0;
-        const cx = Math.floor(wx / CS);
-        const cz = Math.floor(wz / CS);
-        const chunk = this.chunks.get(this._key(cx, cz));
-        if (!chunk || !chunk.generated) return 0;
-        return chunk.blocks[(wx - cx * CS) + (wz - cz * CS) * CS + wy * CS2];
+        const cx = Math.floor(wx / CS), cz = Math.floor(wz / CS);
+        const ch = this.chunks.get(this._key(cx, cz));
+        if (!ch || !ch.generated) return 0;
+        const lx = ((wx % CS) + CS) % CS, lz = ((wz % CS) + CS) % CS;
+        return ch.blocks[lx + lz * CS + wy * CS2];
     }
 
     setBlock(wx, wy, wz, type, fromNetwork = false) {
-        const cx = Math.floor(wx / CS);
-        const cz = Math.floor(wz / CS);
-        const chunk = this.getChunk(cx, cz);
-        if (!chunk || !chunk.generated) {
+        const cx = Math.floor(wx / CS), cz = Math.floor(wz / CS);
+        const ch = this.getChunk(cx, cz);
+        if (!ch || !ch.generated) {
             if (fromNetwork) this.pendingRemoteChanges.push({ wx, wy, wz, type });
             return;
         }
-        const lx = wx - cx * CS, lz = wz - cz * CS;
-        chunk.blocks[lx + lz * CS + wy * CS2] = type;
-        chunk.dirty = true;
-        if (type !== 0 && wy > chunk.maxY) chunk.maxY = wy;
-        if (lx === 0)      this._markDirty(cx - 1, cz);
-        if (lx === CS - 1) this._markDirty(cx + 1, cz);
-        if (lz === 0)      this._markDirty(cx, cz - 1);
-        if (lz === CS - 1) this._markDirty(cx, cz + 1);
-        // Notify network (only for local player actions)
+        const lx = ((wx % CS) + CS) % CS, lz = ((wz % CS) + CS) % CS;
+        ch.blocks[lx + lz * CS + wy * CS2] = type;
+        ch.dirty = true;
+        if (lx === 0) this._markDirty(cx-1, cz);
+        if (lx === CS-1) this._markDirty(cx+1, cz);
+        if (lz === 0) this._markDirty(cx, cz-1);
+        if (lz === CS-1) this._markDirty(cx, cz+1);
         if (!fromNetwork && this.onBlockChange) this.onBlockChange(wx, wy, wz, type);
     }
 
     _markDirty(cx, cz) { const c = this.getChunk(cx, cz); if (c) c.dirty = true; }
 
-    _seededRandom(x, z) {
+    _srand(x, z) {
         let s = (x * 73856093) ^ (z * 19349663);
-        s = ((s >> 16) ^ s) * 0x45d9f3b;
-        s = ((s >> 16) ^ s) * 0x45d9f3b;
-        s = (s >> 16) ^ s;
+        s = ((s >> 16) ^ s) * 0x45d9f3b; s = ((s >> 16) ^ s) * 0x45d9f3b; s = (s >> 16) ^ s;
         return (s & 0x7fffffff) / 0x7fffffff;
     }
 
     getHeight(wx, wz) {
-        const n1 = this.noise.fbm2D(wx * 0.005, wz * 0.005, 5) * 40;
-        const n2 = this.noise.fbm2D(wx * 0.015 + 100, wz * 0.015 + 100, 4) * 15;
-        const n3 = this.noise.noise2D(wx * 0.04, wz * 0.04) * 5;
-        return (BASE_HEIGHT + n1 + n2 + n3) | 0;
+        return (40 + this.noise.fbm2D(wx * 0.005, wz * 0.005, 5) * 40 +
+                this.noise.fbm2D(wx * 0.015 + 100, wz * 0.015 + 100, 4) * 15 +
+                this.noise.noise2D(wx * 0.04, wz * 0.04) * 5) | 0;
     }
 
-    // ── Terrain generation ──
     generateTerrain(chunk) {
         const { cx, cz } = chunk;
-        const worldX = cx * CS, worldZ = cz * CS;
-        const blocks = chunk.blocks;
-        let maxY = 0;
+        const ox = cx * CS, oz = cz * CS, bl = chunk.blocks;
 
-        // Cache height map (reused by trees)
-        const heightMap = new Int32Array(CS2);
-        for (let lz = 0; lz < CS; lz++)
-            for (let lx = 0; lx < CS; lx++)
-                heightMap[lx + lz * CS] = this.getHeight(worldX + lx, worldZ + lz);
+        for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
+            const wx = ox + lx, wz = oz + lz, h = this.getHeight(wx, wz);
+            for (let y = 0; y < CH; y++) {
+                let b = 0;
+                if (y === 0) b = 8;
+                else if (y < h - 4) {
+                    b = 3;
+                    if (y < 40) { const v = this.caveNoise.noise3D(wx*.1, y*.1, wz*.1); if (v > .7) b = 9; else if (v > .65 && y < 25) b = 10; }
+                } else if (y < h) b = h < SEA_LEVEL + 2 ? 4 : 2;
+                else if (y === h) b = h < SEA_LEVEL + 2 ? 4 : (h > 75 ? 11 : 1);
+                else if (y <= SEA_LEVEL && y > h) b = 5;
 
-        for (let lz = 0; lz < CS; lz++) {
-            for (let lx = 0; lx < CS; lx++) {
-                const wx = worldX + lx, wz = worldZ + lz;
-                const height = heightMap[lx + lz * CS];
-                const colBase = lx + lz * CS;
-
-                for (let y = 0; y < CH; y++) {
-                    let bt = 0;
-                    if (y === 0) {
-                        bt = BlockType.BEDROCK;
-                    } else if (y < height - 4) {
-                        bt = BlockType.STONE;
-                        if (y < 40) {
-                            const ov = this.caveNoise.noise3D(wx * 0.1, y * 0.1, wz * 0.1);
-                            if (ov > 0.7) bt = BlockType.COAL_ORE;
-                            else if (ov > 0.65 && y < 25) bt = BlockType.IRON_ORE;
-                        }
-                    } else if (y < height) {
-                        bt = height < SEA_LEVEL + 2 ? BlockType.SAND : BlockType.DIRT;
-                    } else if (y === height) {
-                        bt = height < SEA_LEVEL + 2 ? BlockType.SAND : (height > 75 ? BlockType.SNOW : BlockType.GRASS);
-                    } else if (y <= SEA_LEVEL && y > height) {
-                        bt = BlockType.WATER;
-                    }
-
-                    if (bt !== 0 && y > 1 && y < height - 2 && bt !== BlockType.WATER && bt !== BlockType.BEDROCK) {
-                        const c1 = this.caveNoise.noise3D(wx * 0.05, y * 0.08, wz * 0.05);
-                        const c2 = this.caveNoise.noise3D(wx * 0.05 + 500, y * 0.08 + 500, wz * 0.05 + 500);
-                        if (c1 * c1 + c2 * c2 < 0.02) bt = 0;
-                    }
-
-                    if (bt !== 0) { blocks[colBase + y * CS2] = bt; if (y > maxY) maxY = y; }
+                if (b && y > 1 && y < h - 2 && b !== 5 && b !== 8) {
+                    const c1 = this.caveNoise.noise3D(wx*.05, y*.08, wz*.05);
+                    const c2 = this.caveNoise.noise3D(wx*.05+500, y*.08+500, wz*.05+500);
+                    if (c1*c1 + c2*c2 < .02) b = 0;
                 }
+                if (b) bl[lx + lz * CS + y * CS2] = b;
             }
         }
 
         // Trees
-        for (let lx = 2; lx < CS - 2; lx++) {
-            for (let lz = 2; lz < CS - 2; lz++) {
-                const wx = worldX + lx, wz = worldZ + lz;
-                if (this.treeNoise.noise2D(wx * 0.5, wz * 0.5) > 0.75) {
-                    const h = heightMap[lx + lz * CS];
-                    if (h > SEA_LEVEL + 2 && h < 70 && blocks[lx + lz * CS + h * CS2] === BlockType.GRASS) {
-                        const tmy = this._placeTree(blocks, lx, h + 1, lz, wx, wz);
-                        if (tmy > maxY) maxY = tmy;
+        for (let lx = 2; lx < CS-2; lx++) for (let lz = 2; lz < CS-2; lz++) {
+            const wx = ox+lx, wz = oz+lz;
+            if (this.treeNoise.noise2D(wx*.5, wz*.5) > .75) {
+                const h = this.getHeight(wx, wz);
+                if (h > SEA_LEVEL+2 && h < 70 && bl[lx+lz*CS+h*CS2] === 1) {
+                    const th = 4+(this._srand(wx,wz)*3|0);
+                    for (let dy = 0; dy < th; dy++) if (h+1+dy < CH) bl[lx+lz*CS+(h+1+dy)*CS2] = 6;
+                    for (let dy = th-2; dy <= th+1; dy++) {
+                        const r = dy <= th-1 ? 2 : 1;
+                        for (let dx=-r; dx<=r; dx++) for (let dz=-r; dz<=r; dz++) {
+                            if (!dx && !dz && dy < th) continue;
+                            if (Math.abs(dx)===r && Math.abs(dz)===r && this._srand(wx+dx*7,wz+dz*13+dy)>.5) continue;
+                            const tx=lx+dx, ty=h+1+dy, tz=lz+dz;
+                            if (tx>=0 && tx<CS && ty<CH && tz>=0 && tz<CS && !bl[tx+tz*CS+ty*CS2]) bl[tx+tz*CS+ty*CS2] = 7;
+                        }
                     }
                 }
             }
         }
 
-        chunk.maxY = Math.min(maxY, CH - 1);
         chunk.generated = true;
 
-        // Apply pending remote changes for this chunk
-        const remaining = [];
+        const rem = [];
         for (const c of this.pendingRemoteChanges) {
-            const pcx = Math.floor(c.wx / CS), pcz = Math.floor(c.wz / CS);
+            const pcx = Math.floor(c.wx/CS), pcz = Math.floor(c.wz/CS);
             if (pcx === cx && pcz === cz) {
-                const lx2 = c.wx - cx * CS, lz2 = c.wz - cz * CS;
-                blocks[lx2 + lz2 * CS + c.wy * CS2] = c.type;
-                if (c.type !== 0 && c.wy > chunk.maxY) chunk.maxY = c.wy;
-            } else {
-                remaining.push(c);
-            }
+                const lx2 = ((c.wx%CS)+CS)%CS, lz2 = ((c.wz%CS)+CS)%CS;
+                bl[lx2 + lz2*CS + c.wy*CS2] = c.type;
+            } else rem.push(c);
         }
-        this.pendingRemoteChanges = remaining;
+        this.pendingRemoteChanges = rem;
     }
 
-    _placeTree(blocks, x, y, z, wx, wz) {
-        const th = 4 + (this._seededRandom(wx, wz) * 3 | 0);
-        let my = y;
-        for (let dy = 0; dy < th; dy++) {
-            if (y + dy < CH) { blocks[x + z * CS + (y + dy) * CS2] = BlockType.WOOD; if (y + dy > my) my = y + dy; }
-        }
-        for (let dy = th - 2; dy <= th + 1; dy++) {
-            const r = dy <= th - 1 ? 2 : 1;
-            for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
-                if (dx === 0 && dz === 0 && dy < th) continue;
-                if (Math.abs(dx) === r && Math.abs(dz) === r && this._seededRandom(wx + dx * 7, wz + dz * 13 + dy) > 0.5) continue;
-                const lx = x + dx, ly = y + dy, lz = z + dz;
-                if (lx >= 0 && lx < CS && ly < CH && lz >= 0 && lz < CS) {
-                    const idx = lx + lz * CS + ly * CS2;
-                    if (blocks[idx] === 0) { blocks[idx] = BlockType.LEAVES; if (ly > my) my = ly; }
-                }
-            }
-        }
-        return my;
-    }
-
-    // ── Optimized mesh building ──
-    // Uses regular arrays (V8-optimized push) + all other optimizations
     buildChunkMesh(chunk) {
-        const { cx, cz } = chunk;
-        const blocks = chunk.blocks;
-        const worldX = cx * CS, worldZ = cz * CS;
-        const maxY = chunk.maxY;
+        const bl = chunk.blocks;
+        const ox = chunk.cx * CS, oz = chunk.cz * CS;
+        const pos = [], norm = [], uv = [];
+        const wpos = [], wnorm = [], wuv = [];
+        let si = 0, wi = 0;
 
-        // Cache neighbor block arrays (avoid Map lookup per face)
-        const cnx = this.getChunk(cx - 1, cz);
-        const cpx = this.getChunk(cx + 1, cz);
-        const cnz = this.getChunk(cx, cz - 1);
-        const cpz = this.getChunk(cx, cz + 1);
-        const bnx = cnx && cnx.generated ? cnx.blocks : null;
-        const bpx = cpx && cpx.generated ? cpx.blocks : null;
-        const bnz = cnz && cnz.generated ? cnz.blocks : null;
-        const bpz = cpz && cpz.generated ? cpz.blocks : null;
-
-        const sPos = [], sNorm = [], sUV = [];
-        const wPos = [], wNorm = [], wUV = [];
-        let sf = 0, wf = 0;
-
-        for (let y = 0; y <= maxY; y++) {
-            const yOff = y * CS2;
+        for (let y = 0; y < CH; y++) {
+            const yo = y * CS2;
             for (let z = 0; z < CS; z++) {
-                const zOff = z * CS;
+                const zo = z * CS;
                 for (let x = 0; x < CS; x++) {
-                    const bt = blocks[x + zOff + yOff];
-                    if (bt === 0) continue;
+                    const bt = bl[x + zo + yo];
+                    if (!bt) continue;
                     const isW = bt === 5;
 
-                    for (let f = 0; f < 6; f++) {
-                        const nx = x + FDIR_X[f];
-                        const ny = y + FDIR_Y[f];
-                        const nz = z + FDIR_Z[f];
+                    for (let fi = 0; fi < 6; fi++) {
+                        const face = FACES[fi];
+                        const nx = x + face.dir[0], ny = y + face.dir[1], nz = z + face.dir[2];
 
-                        // Inline neighbor lookup
                         let nb;
-                        if (ny < 0 || ny >= CH) { nb = 0; }
-                        else if (nx >= 0 && nx < CS && nz >= 0 && nz < CS) {
-                            nb = blocks[nx + nz * CS + ny * CS2];
-                        } else if (nx < 0) { nb = bnx ? bnx[(CS-1) + nz * CS + ny * CS2] : 0; }
-                        else if (nx >= CS) { nb = bpx ? bpx[nz * CS + ny * CS2] : 0; }
-                        else if (nz < 0) { nb = bnz ? bnz[nx + (CS-1) * CS + ny * CS2] : 0; }
-                        else { nb = bpz ? bpz[nx + ny * CS2] : 0; }
+                        if (ny < 0 || ny >= CH) nb = 0;
+                        else if (nx >= 0 && nx < CS && nz >= 0 && nz < CS) nb = bl[nx + nz*CS + ny*CS2];
+                        else nb = this.getBlock(ox+nx, ny, oz+nz);
 
-                        // Visibility (array lookup, no object property access)
-                        if (isW) { if (nb === 5 || !IS_TRANSPARENT[nb]) continue; }
-                        else { if (!IS_TRANSPARENT[nb]) continue; }
+                        const nbp = BlockProps[nb];
+                        if (isW ? (nb === 5 || !nbp.transparent) : !nbp.transparent) continue;
 
-                        // Choose target arrays
-                        const pA = isW ? wPos : sPos;
-                        const nA = isW ? wNorm : sNorm;
-                        const uA = isW ? wUV : sUV;
+                        const ti = getTexIdx(bt, fi);
+                        const [u0,v0,u1,v1] = getUV(ti);
+                        const p = isW ? wpos : pos;
+                        const n = isW ? wnorm : norm;
+                        const u = isW ? wuv : uv;
+                        const wyo = isW && fi === 0 ? -0.1 : 0;
 
-                        // Vertex positions (unrolled)
-                        const vb = f * 12;
-                        const wx = worldX + x, wz = worldZ + z;
-                        const wyo = (isW && f === 0) ? -0.1 : 0;
-                        pA.push(
-                            wx+FVERT[vb],  y+FVERT[vb+1]+wyo,  wz+FVERT[vb+2],
-                            wx+FVERT[vb+3],y+FVERT[vb+4]+wyo,  wz+FVERT[vb+5],
-                            wx+FVERT[vb+6],y+FVERT[vb+7]+wyo,  wz+FVERT[vb+8],
-                            wx+FVERT[vb+9],y+FVERT[vb+10]+wyo, wz+FVERT[vb+11]
-                        );
-
-                        // Normals
-                        const n3 = f * 3;
-                        const nn0 = FNORM[n3], nn1 = FNORM[n3+1], nn2 = FNORM[n3+2];
-                        nA.push(nn0,nn1,nn2, nn0,nn1,nn2, nn0,nn1,nn2, nn0,nn1,nn2);
-
-                        // UVs (pre-computed table)
-                        const uvOff = (bt * 6 + f) * 4;
-                        const u0 = UV_TABLE[uvOff], v0 = UV_TABLE[uvOff+1];
-                        const du = UV_TABLE[uvOff+2], dv = UV_TABLE[uvOff+3];
-                        const fb = f * 8;
-                        uA.push(
-                            u0+FUV[fb]*du,   v0+FUV[fb+1]*dv,
-                            u0+FUV[fb+2]*du, v0+FUV[fb+3]*dv,
-                            u0+FUV[fb+4]*du, v0+FUV[fb+5]*dv,
-                            u0+FUV[fb+6]*du, v0+FUV[fb+7]*dv
-                        );
-
-                        if (isW) wf++; else sf++;
+                        for (const c of face.corners) {
+                            p.push(ox+x+c[0], y+c[1]+wyo, oz+z+c[2]);
+                            n.push(face.dir[0], face.dir[1], face.dir[2]);
+                            u.push(u0 + c[3]*(u1-u0), v0 + c[4]*(v1-v0));
+                        }
+                        if (isW) wi++; else si++;
                     }
                 }
             }
         }
 
-        // Dispose old
         if (chunk.mesh) { this.scene.remove(chunk.mesh); chunk.mesh.geometry.dispose(); chunk.mesh = null; }
         if (chunk.waterMesh) { this.scene.remove(chunk.waterMesh); chunk.waterMesh.geometry.dispose(); chunk.waterMesh = null; }
 
-        // Build solid mesh
-        if (sf > 0) {
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(sPos, 3));
-            geo.setAttribute('normal', new THREE.Float32BufferAttribute(sNorm, 3));
-            geo.setAttribute('uv', new THREE.Float32BufferAttribute(sUV, 2));
-
-            // Generate indices
-            const idx = new Uint32Array(sf * 6);
-            for (let i = 0; i < sf; i++) {
-                const v = i * 4, o = i * 6;
-                idx[o]=v; idx[o+1]=v+2; idx[o+2]=v+1; idx[o+3]=v; idx[o+4]=v+3; idx[o+5]=v+2;
-            }
-            geo.setIndex(new THREE.BufferAttribute(idx, 1));
-
-            chunk.mesh = new THREE.Mesh(geo, this.material);
+        if (si > 0) {
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+            g.setAttribute('normal', new THREE.Float32BufferAttribute(norm, 3));
+            g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+            const idx = new Uint32Array(si * 6);
+            for (let i = 0; i < si; i++) { const v=i*4,o=i*6; idx[o]=v;idx[o+1]=v+2;idx[o+2]=v+1;idx[o+3]=v;idx[o+4]=v+3;idx[o+5]=v+2; }
+            g.setIndex(new THREE.BufferAttribute(idx, 1));
+            chunk.mesh = new THREE.Mesh(g, this.material);
             this.scene.add(chunk.mesh);
         }
 
-        // Build water mesh
-        if (wf > 0) {
-            const geo = new THREE.BufferGeometry();
-            geo.setAttribute('position', new THREE.Float32BufferAttribute(wPos, 3));
-            geo.setAttribute('normal', new THREE.Float32BufferAttribute(wNorm, 3));
-            geo.setAttribute('uv', new THREE.Float32BufferAttribute(wUV, 2));
-
-            const idx = new Uint32Array(wf * 6);
-            for (let i = 0; i < wf; i++) {
-                const v = i * 4, o = i * 6;
-                idx[o]=v; idx[o+1]=v+2; idx[o+2]=v+1; idx[o+3]=v; idx[o+4]=v+3; idx[o+5]=v+2;
-            }
-            geo.setIndex(new THREE.BufferAttribute(idx, 1));
-
-            chunk.waterMesh = new THREE.Mesh(geo, this.waterMaterial);
+        if (wi > 0) {
+            const g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.Float32BufferAttribute(wpos, 3));
+            g.setAttribute('normal', new THREE.Float32BufferAttribute(wnorm, 3));
+            g.setAttribute('uv', new THREE.Float32BufferAttribute(wuv, 2));
+            const idx = new Uint32Array(wi * 6);
+            for (let i = 0; i < wi; i++) { const v=i*4,o=i*6; idx[o]=v;idx[o+1]=v+2;idx[o+2]=v+1;idx[o+3]=v;idx[o+4]=v+3;idx[o+5]=v+2; }
+            g.setIndex(new THREE.BufferAttribute(idx, 1));
+            chunk.waterMesh = new THREE.Mesh(g, this.waterMaterial);
             this.scene.add(chunk.waterMesh);
         }
 
         chunk.dirty = false;
     }
 
-    // Force-load a chunk synchronously (for spawn area)
     forceLoad(cx, cz) {
         const key = this._key(cx, cz);
-        let chunk = this.chunks.get(key);
-        if (chunk && chunk.mesh) return;
-        if (!chunk) {
-            chunk = new Chunk(cx, cz);
-            this.chunks.set(key, chunk);
-            this.generateTerrain(chunk);
-        }
-        this.buildChunkMesh(chunk);
+        let ch = this.chunks.get(key);
+        if (ch && ch.mesh) return;
+        if (!ch) { ch = new Chunk(cx, cz); this.chunks.set(key, ch); this.generateTerrain(ch); }
+        this.buildChunkMesh(ch);
     }
 
-    // ── Per-frame update ──
     update(playerX, playerZ) {
-        const pcx = Math.floor(playerX / CS);
-        const pcz = Math.floor(playerZ / CS);
+        const pcx = Math.floor(playerX / CS), pcz = Math.floor(playerZ / CS);
         const rd = this.renderDistance;
 
-        // 1. Generate terrain immediately for new chunks (one-time cost)
-        for (let dx = -rd; dx <= rd; dx++) {
-            for (let dz = -rd; dz <= rd; dz++) {
-                if (dx * dx + dz * dz > rd * rd) continue;
-                const cx = pcx + dx, cz = pcz + dz;
-                const key = this._key(cx, cz);
-                if (!this.chunks.has(key)) {
-                    const chunk = new Chunk(cx, cz);
-                    this.chunks.set(key, chunk);
-                    this.generateTerrain(chunk);
-                    this.meshQueue.push(chunk);
-                    this._markDirty(cx - 1, cz);
-                    this._markDirty(cx + 1, cz);
-                    this._markDirty(cx, cz - 1);
-                    this._markDirty(cx, cz + 1);
-                }
+        for (let dx = -rd; dx <= rd; dx++) for (let dz = -rd; dz <= rd; dz++) {
+            if (dx*dx + dz*dz > rd*rd) continue;
+            const cx = pcx+dx, cz = pcz+dz, key = this._key(cx, cz);
+            if (!this.chunks.has(key)) {
+                const ch = new Chunk(cx, cz);
+                this.chunks.set(key, ch);
+                this.generateTerrain(ch);
+                this.meshQueue.push(ch);
+                this._markDirty(cx-1,cz); this._markDirty(cx+1,cz);
+                this._markDirty(cx,cz-1); this._markDirty(cx,cz+1);
             }
         }
 
-        // 2. Build meshes progressively (4 per frame)
         let built = 0;
         if (this.meshQueue.length > 0) {
-            this.meshQueue.sort((a, b) =>
-                ((a.cx-pcx)**2 + (a.cz-pcz)**2) - ((b.cx-pcx)**2 + (b.cz-pcz)**2)
-            );
-            while (this.meshQueue.length > 0 && built < 4) {
-                const chunk = this.meshQueue.shift();
-                this.buildChunkMesh(chunk);
-                built++;
-            }
+            this.meshQueue.sort((a,b) => ((a.cx-pcx)**2+(a.cz-pcz)**2) - ((b.cx-pcx)**2+(b.cz-pcz)**2));
+            while (this.meshQueue.length > 0 && built < 4) { this.buildChunkMesh(this.meshQueue.shift()); built++; }
         }
 
-        // 3. Rebuild dirty chunks
-        for (const chunk of this.chunks.values()) {
+        for (const ch of this.chunks.values()) {
             if (built >= 4) break;
-            if (chunk.dirty && chunk.generated) {
-                this.buildChunkMesh(chunk);
-                built++;
-            }
+            if (ch.dirty && ch.generated) { this.buildChunkMesh(ch); built++; }
         }
 
-        // 4. Unload far chunks
-        const unloadDist2 = (rd + 2) * (rd + 2);
-        for (const [key, chunk] of this.chunks) {
-            const dx = chunk.cx - pcx, dz = chunk.cz - pcz;
-            if (dx * dx + dz * dz > unloadDist2) {
-                if (chunk.mesh) { this.scene.remove(chunk.mesh); chunk.mesh.geometry.dispose(); }
-                if (chunk.waterMesh) { this.scene.remove(chunk.waterMesh); chunk.waterMesh.geometry.dispose(); }
+        const ud2 = (rd+2)*(rd+2);
+        for (const [key, ch] of this.chunks) {
+            if ((ch.cx-pcx)**2 + (ch.cz-pcz)**2 > ud2) {
+                if (ch.mesh) { this.scene.remove(ch.mesh); ch.mesh.geometry.dispose(); }
+                if (ch.waterMesh) { this.scene.remove(ch.waterMesh); ch.waterMesh.geometry.dispose(); }
                 this.chunks.delete(key);
             }
         }
     }
 
-    // ── DDA Raycast ──
-    raycast(origin, direction, maxDist = 8) {
+    raycast(origin, dir, maxDist = 8) {
         let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
-        const sx = direction.x >= 0 ? 1 : -1;
-        const sy = direction.y >= 0 ? 1 : -1;
-        const sz = direction.z >= 0 ? 1 : -1;
-        const tdx = direction.x !== 0 ? Math.abs(1 / direction.x) : 1e30;
-        const tdy = direction.y !== 0 ? Math.abs(1 / direction.y) : 1e30;
-        const tdz = direction.z !== 0 ? Math.abs(1 / direction.z) : 1e30;
-        let tmx = direction.x !== 0 ? (direction.x > 0 ? x+1-origin.x : origin.x-x) * tdx : 1e30;
-        let tmy = direction.y !== 0 ? (direction.y > 0 ? y+1-origin.y : origin.y-y) * tdy : 1e30;
-        let tmz = direction.z !== 0 ? (direction.z > 0 ? z+1-origin.z : origin.z-z) * tdz : 1e30;
-        let px = x, py = y, pz = z, dist = 0;
-
-        while (dist < maxDist) {
-            const b = this.getBlock(x, y, z);
-            if (b !== 0 && b !== 5) return { x, y, z, block: b, normalX: px, normalY: py, normalZ: pz };
-            px = x; py = y; pz = z;
-            if (tmx < tmy) {
-                if (tmx < tmz) { x += sx; dist = tmx; tmx += tdx; }
-                else { z += sz; dist = tmz; tmz += tdz; }
-            } else {
-                if (tmy < tmz) { y += sy; dist = tmy; tmy += tdy; }
-                else { z += sz; dist = tmz; tmz += tdz; }
-            }
+        const sx = dir.x >= 0 ? 1 : -1, sy = dir.y >= 0 ? 1 : -1, sz = dir.z >= 0 ? 1 : -1;
+        const tdx = dir.x ? Math.abs(1/dir.x) : 1e30, tdy = dir.y ? Math.abs(1/dir.y) : 1e30, tdz = dir.z ? Math.abs(1/dir.z) : 1e30;
+        let tmx = dir.x ? (dir.x>0 ? x+1-origin.x : origin.x-x)*tdx : 1e30;
+        let tmy = dir.y ? (dir.y>0 ? y+1-origin.y : origin.y-y)*tdy : 1e30;
+        let tmz = dir.z ? (dir.z>0 ? z+1-origin.z : origin.z-z)*tdz : 1e30;
+        let px=x, py=y, pz=z, d=0;
+        while (d < maxDist) {
+            const b = this.getBlock(x,y,z);
+            if (b && b !== 5) return {x,y,z,block:b,normalX:px,normalY:py,normalZ:pz};
+            px=x; py=y; pz=z;
+            if (tmx<tmy) { if (tmx<tmz){x+=sx;d=tmx;tmx+=tdx}else{z+=sz;d=tmz;tmz+=tdz} }
+            else { if (tmy<tmz){y+=sy;d=tmy;tmy+=tdy}else{z+=sz;d=tmz;tmz+=tdz} }
         }
         return null;
     }

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BlockType, IS_SOLID } from './textures.js';
+import { BlockType, BlockProps } from './textures.js';
 import { CHUNK_HEIGHT, SEA_LEVEL } from './world.js';
 
 const GRAVITY = -25;
@@ -154,7 +154,7 @@ export class Player {
             for (let by = minY; by <= maxY; by++) {
                 for (let bz = minZ; bz <= maxZ; bz++) {
                     const b = this.world.getBlock(bx, by, bz);
-                    if (IS_SOLID[b] &&
+                    if (b && BlockProps[b].solid &&
                         px + HW > bx && px - HW < bx + 1 &&
                         py + P_HEIGHT > by && py < by + 1 &&
                         pz + HW > bz && pz - HW < bz + 1) {

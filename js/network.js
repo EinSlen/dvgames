@@ -2,6 +2,19 @@
 
 const COLORS = [0xe74c3c,0x2ecc71,0x3498db,0xf1c40f,0x9b59b6,0xe67e22,0x1abc9c,0xfd79a8];
 
+// Lazy-load PeerJS only when needed (not on page load)
+let peerLoaded = false;
+function loadPeerJS() {
+    if (peerLoaded) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js';
+        s.onload = () => { peerLoaded = true; resolve(); };
+        s.onerror = () => reject('Failed to load PeerJS');
+        document.head.appendChild(s);
+    });
+}
+
 export class Network {
     constructor() {
         this.peer = null;
@@ -32,12 +45,13 @@ export class Network {
     }
 
     // ── Host ──
-    host(name) {
+    async host(name) {
         this.isHost = true;
         this.myName = name || 'Host';
         this.seed = (Math.random() * 999999) | 0;
         this.roomCode = this._code();
 
+        await loadPeerJS();
         return new Promise((resolve, reject) => {
             this.peer = new Peer('mc3d-' + this.roomCode, { debug: 0 });
 
@@ -100,11 +114,12 @@ export class Network {
     }
 
     // ── Client ──
-    join(code, name) {
+    async join(code, name) {
         this.isHost = false;
         this.myName = name || 'Player';
         this.roomCode = code.toUpperCase().trim();
 
+        await loadPeerJS();
         return new Promise((resolve, reject) => {
             this.peer = new Peer(undefined, { debug: 0 });
 

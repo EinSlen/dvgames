@@ -3,7 +3,7 @@ import { createTextureAtlas } from './textures.js';
 import { World, CHUNK_SIZE } from './world.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
-import { Network } from './network.js';
+// Network loaded lazily only for multiplayer
 
 class RemotePlayer {
     constructor(scene, name, color) {
@@ -125,6 +125,8 @@ class Game {
     }
 
     async _hostGame() {
+        this.ui.setStatus('Chargement...');
+        const { Network } = await import('./network.js');
         this.ui.setStatus('Connexion...');
         this.network = new Network();
         this._wireNetwork();
@@ -138,6 +140,8 @@ class Game {
     async _joinGame() {
         const code = this.ui.getRoomCode();
         if (!code || code.length < 3) { this.ui.setStatus('Entre un code valide'); return; }
+        this.ui.setStatus('Chargement...');
+        const { Network } = await import('./network.js');
         this.ui.setStatus('Connexion a ' + code + '...');
         this.network = new Network();
         this._wireNetwork();
