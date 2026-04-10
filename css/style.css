@@ -1,0 +1,153 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    overflow: hidden;
+    background: #000;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    user-select: none;
+}
+
+#game {
+    width: 100vw;
+    height: 100vh;
+}
+
+#game canvas {
+    display: block;
+}
+
+#ui {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* Crosshair */
+#crosshair {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+    mix-blend-mode: difference;
+}
+
+/* Hotbar */
+#hotbar {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 2px;
+}
+
+.hotbar-slot {
+    width: 52px;
+    height: 52px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(100, 100, 100, 0.6);
+    border-radius: 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.hotbar-slot.selected {
+    border-color: #fff;
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.slot-number {
+    position: absolute;
+    top: 2px;
+    left: 4px;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.slot-name {
+    font-size: 8px;
+    color: #fff;
+    text-align: center;
+    line-height: 1.1;
+    margin-top: 4px;
+    max-width: 48px;
+    overflow: hidden;
+}
+
+/* Debug info */
+#debug-info {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    color: #fff;
+    font-size: 13px;
+    font-family: 'Courier New', monospace;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
+    line-height: 1.5;
+}
+
+/* Start screen */
+#start-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    pointer-events: auto;
+    cursor: pointer;
+}
+
+#start-screen h1 {
+    font-size: 52px;
+    margin-bottom: 10px;
+    text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
+    letter-spacing: 4px;
+    color: #6abf4b;
+}
+
+#start-screen > p {
+    font-size: 20px;
+    margin-bottom: 30px;
+    animation: pulse 1.5s ease-in-out infinite;
+    color: #ccc;
+}
+
+.controls-info {
+    background: rgba(0, 0, 0, 0.5);
+    padding: 20px 30px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 2;
+}
+
+.controls-info b {
+    color: #6abf4b;
+    min-width: 140px;
+    display: inline-block;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
