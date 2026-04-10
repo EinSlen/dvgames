@@ -3,6 +3,7 @@ import { createTextureAtlas, getBlockIconURL, blockFaces, createCrackTextures, B
 import { World, CHUNK_SIZE } from './world.js';
 import { Player } from './player.js';
 import { UI } from './ui.js';
+import { MobManager } from './mobs.js';
 // Network loaded lazily only for multiplayer
 
 const ATLAS_COLS = 8;
@@ -283,6 +284,7 @@ class Game {
 
         this._initViewmodel();
         this._initCrackOverlay();
+        this.mobManager = new MobManager(this.scene, this.world);
 
         // Set block icons in UI
         this.ui.setBlockIcons(this._blockIconURLs);
@@ -354,7 +356,24 @@ class Game {
 
         this.player.update(dt);
         this.world.update(this.player.position.x, this.player.position.z);
+        this.mobManager.update(dt, this.player.position.x, this.player.position.y, this.player.position.z);
         for (const rp of this.remotePlayers.values()) rp.interpolate(dt);
+
+        // Attack mobs with left click — check mobs first, if hit cancel block breaking
+        if (this.player.mouseDown.left && this.player.attackCooldown <= 0) {
+            const origin = this.camera.position;
+            const dir = this.player._lookDir;
+            const hitMob = this.mobManager.attackRay(origin, dir, 5);
+            if (hitMob) {
+                hitMob.hit(1);
+                this.player.attackCooldown = 0.4;
+                this.player.didSwing = true;
+                // Cancel block breaking since we hit a mob
+                this.player.breakProgress = 0;
+                this.player.breakStage = -1;
+                this.player.breakingBlock = null;
+            }
+        }
 
         if (this.network) { this.posTimer += dt; if (this.posTimer >= 0.1) { this.posTimer = 0; const p = this.player; this.network.sendPos(p.position.x, p.position.y, p.position.z, p.yaw, p.pitch); } }
 

@@ -35,6 +35,7 @@ export class Player {
         this.selectedBlock = null;
         this.breakCooldown = 0;
         this.placeCooldown = 0;
+        this.attackCooldown = 0;
         this.hotbar = [1, 2, 3, 12, 13, 6, 7, 4, 14]; // block type IDs
         this.selectedSlot = 0;
 
@@ -208,6 +209,7 @@ export class Player {
 
     _updateBlockInteraction(dt) {
         this.placeCooldown = Math.max(0, this.placeCooldown - dt);
+        this.attackCooldown = Math.max(0, this.attackCooldown - dt);
         this.didSwing = false;
 
         // Left click HELD - progressive breaking
