@@ -1,153 +1,64 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-serif; user-select: none; }
+#game { width: 100vw; height: 100vh; }
+#game canvas { display: block; }
+#ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
 
-body {
-    overflow: hidden;
-    background: #000;
-    font-family: 'Segoe UI', Arial, sans-serif;
-    user-select: none;
-}
+#crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: white; font-size: 24px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.8); mix-blend-mode: difference; }
 
-#game {
-    width: 100vw;
-    height: 100vh;
-}
+#hotbar { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 2px; }
+.hotbar-slot { width: 52px; height: 52px; background: rgba(0,0,0,0.6); border: 2px solid rgba(100,100,100,0.6); border-radius: 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; }
+.hotbar-slot.selected { border-color: #fff; background: rgba(255,255,255,0.2); }
+.slot-number { position: absolute; top: 2px; left: 4px; font-size: 10px; color: rgba(255,255,255,0.5); }
+.slot-name { font-size: 8px; color: #fff; text-align: center; line-height: 1.1; margin-top: 4px; max-width: 48px; overflow: hidden; }
 
-#game canvas {
-    display: block;
-}
+#debug-info { position: absolute; top: 10px; left: 10px; color: #fff; font-size: 13px; font-family: 'Courier New', monospace; text-shadow: 1px 1px 2px rgba(0,0,0,0.9); line-height: 1.5; }
 
-#ui {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 10;
-}
-
-/* Crosshair */
-#crosshair {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    color: white;
-    font-size: 24px;
-    font-weight: bold;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
-    mix-blend-mode: difference;
-}
-
-/* Hotbar */
-#hotbar {
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 2px;
-}
-
-.hotbar-slot {
-    width: 52px;
-    height: 52px;
-    background: rgba(0, 0, 0, 0.6);
-    border: 2px solid rgba(100, 100, 100, 0.6);
-    border-radius: 4px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-}
-
-.hotbar-slot.selected {
-    border-color: #fff;
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.slot-number {
-    position: absolute;
-    top: 2px;
-    left: 4px;
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.5);
-}
-
-.slot-name {
-    font-size: 8px;
-    color: #fff;
-    text-align: center;
-    line-height: 1.1;
-    margin-top: 4px;
-    max-width: 48px;
-    overflow: hidden;
-}
-
-/* Debug info */
-#debug-info {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    color: #fff;
-    font-size: 13px;
-    font-family: 'Courier New', monospace;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.9);
-    line-height: 1.5;
-}
-
-/* Start screen */
+/* Start / Menu screen */
 #start-screen {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    pointer-events: auto;
-    cursor: pointer;
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.75); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #fff; pointer-events: auto;
+}
+#start-screen h1 { font-size: 48px; margin-bottom: 20px; color: #6abf4b; text-shadow: 3px 3px 6px rgba(0,0,0,0.8); letter-spacing: 3px; }
+
+.menu-section { margin-bottom: 15px; }
+#player-name {
+    padding: 10px 16px; font-size: 16px; border: 2px solid #6abf4b; border-radius: 6px;
+    background: rgba(0,0,0,0.5); color: #fff; text-align: center; width: 220px; outline: none;
+}
+#player-name:focus { border-color: #8fd66b; }
+
+.menu-buttons { display: flex; flex-direction: column; gap: 10px; align-items: center; margin-bottom: 15px; }
+.menu-buttons button {
+    padding: 12px 28px; font-size: 16px; border: none; border-radius: 6px;
+    cursor: pointer; font-weight: bold; min-width: 220px; transition: all 0.15s;
+}
+#btn-solo { background: #6abf4b; color: #fff; }
+#btn-solo:hover { background: #7dd65c; transform: scale(1.03); }
+#btn-host { background: #3498db; color: #fff; }
+#btn-host:hover { background: #52aee6; transform: scale(1.03); }
+#btn-join { background: #e67e22; color: #fff; padding: 12px 20px; min-width: 110px; }
+#btn-join:hover { background: #f0983a; transform: scale(1.03); }
+
+.join-row { display: flex; gap: 8px; align-items: center; }
+#room-code-input {
+    padding: 12px; font-size: 16px; width: 100px; border: 2px solid #e67e22; border-radius: 6px;
+    background: rgba(0,0,0,0.5); color: #fff; text-align: center; text-transform: uppercase;
+    letter-spacing: 3px; font-weight: bold; outline: none;
+}
+#room-code-input:focus { border-color: #f0983a; }
+
+#menu-status { color: #f1c40f; font-size: 14px; min-height: 20px; margin-bottom: 10px; }
+
+.controls-info { background: rgba(0,0,0,0.4); padding: 14px 24px; border-radius: 8px; font-size: 13px; line-height: 1.9; }
+.controls-info b { color: #6abf4b; }
+
+/* Room info (during gameplay) */
+#room-info {
+    position: absolute; top: 10px; right: 10px; color: #f1c40f; font-size: 16px;
+    font-family: 'Courier New', monospace; font-weight: bold;
+    text-shadow: 1px 1px 3px rgba(0,0,0,0.9); letter-spacing: 2px;
 }
 
-#start-screen h1 {
-    font-size: 52px;
-    margin-bottom: 10px;
-    text-shadow: 3px 3px 6px rgba(0,0,0,0.8);
-    letter-spacing: 4px;
-    color: #6abf4b;
-}
-
-#start-screen > p {
-    font-size: 20px;
-    margin-bottom: 30px;
-    animation: pulse 1.5s ease-in-out infinite;
-    color: #ccc;
-}
-
-.controls-info {
-    background: rgba(0, 0, 0, 0.5);
-    padding: 20px 30px;
-    border-radius: 8px;
-    font-size: 14px;
-    line-height: 2;
-}
-
-.controls-info b {
-    color: #6abf4b;
-    min-width: 140px;
-    display: inline-block;
-}
-
-@keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
-}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
