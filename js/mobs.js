@@ -6,6 +6,7 @@ const MOB_TYPES = {
     CHOCOLAT: { color: 0x4a2a10, darkColor: 0x301808, bodyW: 0.35, bodyH: 0.35, bodyD: 0.35, legH: 0.25, headSize: 0.3, hp: 5, name: 'Chocolat' },
     BIERE: { color: 0xd4a030, darkColor: 0xa07020, bodyW: 0.3, bodyH: 0.5, bodyD: 0.3, legH: 0.2, headSize: 0.2, hp: 4, name: 'Biere' },
     VENDOR: { color: 0xf0f0f0, darkColor: 0xc00020, bodyW: 0.4, bodyH: 0.6, bodyD: 0.25, legH: 0.35, headSize: 0.35, hp: 100, name: 'Friteur', isVendor: true },
+    DARONNE: { color: 0xff69b4, darkColor: 0x8b4513, bodyW: 0.7, bodyH: 0.7, bodyD: 0.6, legH: 0.3, headSize: 0.4, hp: 200, name: 'Daronne', isDaronne: true },
 };
 
 class Mob {
@@ -96,6 +97,61 @@ class Mob {
             this.group.add(tag);
 
             this.bodyHeight = 1.4;
+        } else if (t.isDaronne) {
+            // La grosse daronne de Arnaud
+            const skinMat = new THREE.MeshBasicMaterial({ color: 0xd4a574 });
+
+            // Legs (short, sturdy)
+            this.legs = [];
+            for (const lx of [-0.15, 0.15]) {
+                const pivot = new THREE.Group();
+                pivot.position.set(lx, 0.3, 0);
+                const leg = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.3, 0.2), matDark);
+                leg.position.y = -0.15;
+                pivot.add(leg);
+                this.group.add(pivot);
+                this.legs.push(pivot);
+            }
+
+            // Big body (pink dress)
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.65, 0.6), mat);
+            body.position.y = 0.65;
+            this.group.add(body);
+
+            // Arms (chubby)
+            for (const ax of [-0.42, 0.42]) {
+                const arm = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.4, 0.16), skinMat);
+                arm.position.set(ax, 0.6, 0);
+                this.group.add(arm);
+            }
+
+            // Head (skin)
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.35, 0.35), skinMat);
+            head.position.set(0, 1.2, 0);
+            this.group.add(head);
+
+            // Hair (brown, big)
+            const hair = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.38), matDark);
+            hair.position.set(0, 1.35, -0.03);
+            this.group.add(hair);
+
+            // Handbag (small dark box on the side)
+            const bag = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.15, 0.08), new THREE.MeshBasicMaterial({ color: 0x8b0000 }));
+            bag.position.set(-0.48, 0.55, 0.1);
+            this.group.add(bag);
+
+            // Nametag
+            const c = document.createElement('canvas');
+            c.width = 512; c.height = 64;
+            const ctx = c.getContext('2d');
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, 512, 64);
+            ctx.fillStyle = '#ff69b4'; ctx.font = 'bold 22px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('La grosse daronne de Arnaud', 256, 42);
+            const tag = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), transparent: true }));
+            tag.position.y = 1.7; tag.scale.set(2.5, 0.35, 1);
+            this.group.add(tag);
+
+            this.bodyHeight = 1.5;
         } else {
             // Animal mob
             const body = new THREE.Mesh(new THREE.BoxGeometry(t.bodyW, t.bodyH, t.bodyD), mat);
@@ -152,6 +208,40 @@ class Mob {
         // Vendor stays put
         if (this.type.isVendor) {
             this.group.position.set(this.x, this.y, this.z);
+            return false;
+        }
+
+        // Daronne walks slowly
+        if (this.type.isDaronne) {
+            this.aiTimer -= dt;
+            if (this.aiTimer <= 0) {
+                this.aiState = this.aiState === 'idle' ? 'walk' : 'idle';
+                this.walkDir = Math.random() * Math.PI * 2;
+                this.aiTimer = 2 + Math.random() * 5;
+            }
+            const spd = 0.7;
+            if (this.aiState === 'walk') {
+                this.vx = Math.sin(this.walkDir) * spd;
+                this.vz = Math.cos(this.walkDir) * spd;
+                this.yaw = this.walkDir;
+                this._walkPhase = (this._walkPhase || 0) + dt * 3;
+                const s = Math.sin(this._walkPhase) * 0.25;
+                this.legs[0].rotation.x = s;
+                this.legs[1].rotation.x = -s;
+            } else {
+                this.vx = 0; this.vz = 0;
+                for (const l of this.legs) l.rotation.x *= 0.8;
+            }
+            this.vy -= 20 * dt;
+            this.x += this.vx * dt;
+            if (this._collides()) { this.x -= this.vx * dt; this.walkDir = Math.random() * Math.PI * 2; }
+            this.z += this.vz * dt;
+            if (this._collides()) { this.z -= this.vz * dt; this.walkDir = Math.random() * Math.PI * 2; }
+            this.y += this.vy * dt;
+            if (this._collides()) { if (this.vy < 0) this.onGround = true; this.y -= this.vy * dt; this.vy = 0; }
+            if (this.y < -10) return true;
+            this.group.position.set(this.x, this.y, this.z);
+            this.group.rotation.y = this.yaw;
             return false;
         }
 
@@ -345,9 +435,14 @@ export class MobManager {
         const ground = this.world.getBlock(wx, h, wz);
         if (ground !== 1) return; // only spawn on grass
 
-        // Pick random Belgian delicacy
-        const types = [MOB_TYPES.FRITE, MOB_TYPES.GAUFRE, MOB_TYPES.CHOCOLAT, MOB_TYPES.BIERE];
-        const type = types[Math.floor(Math.random() * types.length)];
+        // Pick random mob — daronne is rare
+        const r = Math.random();
+        let type;
+        if (r < 0.08) type = MOB_TYPES.DARONNE;
+        else {
+            const types = [MOB_TYPES.FRITE, MOB_TYPES.GAUFRE, MOB_TYPES.CHOCOLAT, MOB_TYPES.BIERE];
+            type = types[Math.floor(Math.random() * types.length)];
+        }
 
         this.mobs.push(new Mob(this.scene, this.world, type, wx + 0.5, h + 1, wz + 0.5));
     }
