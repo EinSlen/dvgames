@@ -154,9 +154,27 @@ export class World {
     }
 
     getHeight(wx, wz) {
-        return (40 + this.noise.fbm2D(wx * 0.005, wz * 0.005, 5) * 40 +
-                this.noise.fbm2D(wx * 0.015 + 100, wz * 0.015 + 100, 4) * 15 +
-                this.noise.noise2D(wx * 0.04, wz * 0.04) * 5) | 0;
+        // Biome blend: plains vs hills
+        const biome = this.noise.noise2D(wx * 0.003, wz * 0.003); // -1 to 1
+
+        // Plains: very flat (biome < 0)
+        // Hills: rolling terrain (biome > 0)
+        const flatness = Math.max(0, -biome); // 0 to 1, how flat
+        const hilliness = Math.max(0, biome);  // 0 to 1, how hilly
+
+        const base = 42;
+        const plains = this.noise.noise2D(wx * 0.01, wz * 0.01) * 3;
+        const hills = this.noise.fbm2D(wx * 0.008, wz * 0.008, 4) * 25 +
+                      this.noise.noise2D(wx * 0.03, wz * 0.03) * 4;
+
+        return (base + plains * flatness + hills * hilliness) | 0;
+    }
+
+    getBiome(wx, wz) {
+        const b = this.noise.noise2D(wx * 0.003, wz * 0.003);
+        if (b < -0.3) return 'plains';
+        if (b > 0.5) return 'mountains';
+        return 'forest';
     }
 
     generateTerrain(chunk) {
@@ -164,32 +182,49 @@ export class World {
         const ox = cx * CS, oz = cz * CS, bl = chunk.blocks;
 
         for (let lz = 0; lz < CS; lz++) for (let lx = 0; lx < CS; lx++) {
-            const wx = ox + lx, wz = oz + lz, h = this.getHeight(wx, wz);
+            const wx = ox + lx, wz = oz + lz;
+            const h = this.getHeight(wx, wz);
+            const biome = this.getBiome(wx, wz);
+
             for (let y = 0; y < CH; y++) {
                 let b = 0;
-                if (y === 0) b = 8;
+                if (y === 0) b = 8; // bedrock
                 else if (y < h - 4) {
-                    b = 3;
-                    if (y < 40) { const v = this.caveNoise.noise3D(wx*.1, y*.1, wz*.1); if (v > .7) b = 9; else if (v > .65 && y < 25) b = 10; }
-                } else if (y < h) b = h < SEA_LEVEL + 2 ? 4 : 2;
-                else if (y === h) b = h < SEA_LEVEL + 2 ? 4 : (h > 75 ? 11 : 1);
-                else if (y <= SEA_LEVEL && y > h) b = 5;
+                    b = 3; // stone
+                    if (y < 40) {
+                        const v = this.caveNoise.noise3D(wx*.1, y*.1, wz*.1);
+                        if (v > .7) b = 9;        // coal
+                        else if (v > .65 && y < 25) b = 10; // iron
+                    }
+                } else if (y < h) {
+                    b = h < SEA_LEVEL + 2 ? 4 : 2; // sand near water, dirt elsewhere
+                } else if (y === h) {
+                    if (h < SEA_LEVEL + 2) b = 4;       // sand beach
+                    else if (biome === 'mountains' && h > 60) b = 11; // snow
+                    else b = 1; // grass
+                } else if (y <= SEA_LEVEL && y > h) {
+                    b = 5; // water
+                }
 
+                // Caves (only underground, not in plains surface)
                 if (b && y > 1 && y < h - 2 && b !== 5 && b !== 8) {
                     const c1 = this.caveNoise.noise3D(wx*.05, y*.08, wz*.05);
                     const c2 = this.caveNoise.noise3D(wx*.05+500, y*.08+500, wz*.05+500);
-                    if (c1*c1 + c2*c2 < .02) b = 0;
+                    if (c1*c1 + c2*c2 < .015) b = 0;
                 }
                 if (b) bl[lx + lz * CS + y * CS2] = b;
             }
         }
 
-        // Trees
+        // Trees — more in forests, fewer in plains, none in mountains
         for (let lx = 2; lx < CS-2; lx++) for (let lz = 2; lz < CS-2; lz++) {
             const wx = ox+lx, wz = oz+lz;
-            if (this.treeNoise.noise2D(wx*.5, wz*.5) > .75) {
+            const biome = this.getBiome(wx, wz);
+            const treeChance = biome === 'forest' ? 0.65 : (biome === 'plains' ? 0.88 : 0.95);
+
+            if (this.treeNoise.noise2D(wx*.5, wz*.5) > treeChance) {
                 const h = this.getHeight(wx, wz);
-                if (h > SEA_LEVEL+2 && h < 70 && bl[lx+lz*CS+h*CS2] === 1) {
+                if (h > SEA_LEVEL+2 && h < 65 && bl[lx+lz*CS+h*CS2] === 1) {
                     const th = 4+(this._srand(wx,wz)*3|0);
                     for (let dy = 0; dy < th; dy++) if (h+1+dy < CH) bl[lx+lz*CS+(h+1+dy)*CS2] = 6;
                     for (let dy = th-2; dy <= th+1; dy++) {
@@ -204,6 +239,9 @@ export class World {
                 }
             }
         }
+
+        // Flowers/tall grass in plains (using leaves blocks as decoration)
+        // Skipped for performance
 
         chunk.generated = true;
 
@@ -277,10 +315,6 @@ export class World {
             g.setIndex(new THREE.BufferAttribute(idx, 1));
             chunk.mesh = new THREE.Mesh(g, this.material);
             this.scene.add(chunk.mesh);
-
-            if (g > 1 && new Uint8Array(si * 6)) {
-                g.setIndex(new THREE.BufferGeometry(idx))
-            }
         }
 
         if (wi > 0) {
