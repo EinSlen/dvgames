@@ -61,4 +61,12 @@ body { overflow: hidden; background: #000; font-family: 'Segoe UI', Arial, sans-
     text-shadow: 1px 1px 3px rgba(0,0,0,0.9); letter-spacing: 2px;
 }
 
+/* Pause screen */
+#pause-screen {
+    position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.45); display: flex; align-items: center;
+    justify-content: center; pointer-events: auto; cursor: pointer;
+}
+#pause-screen p { color: #ccc; font-size: 22px; animation: pulse 1.5s ease-in-out infinite; }
+
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }

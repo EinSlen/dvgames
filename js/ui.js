@@ -7,6 +7,7 @@ export class UI {
         this._createHotbar();
         this._createDebugInfo();
         this._createStartScreen();
+        this._createPauseScreen();
         this._createRoomInfo();
 
         this._lastDebugUpdate = 0;
@@ -72,6 +73,15 @@ export class UI {
         this.container.appendChild(screen);
     }
 
+    _createPauseScreen() {
+        const el = document.createElement('div');
+        el.id = 'pause-screen';
+        el.style.display = 'none';
+        el.innerHTML = '<p>Cliquez pour reprendre</p>';
+        this.container.appendChild(el);
+        this.pauseScreen = el;
+    }
+
     _createRoomInfo() {
         const el = document.createElement('div');
         el.id = 'room-info';
@@ -84,9 +94,9 @@ export class UI {
     getPlayerName() { return document.getElementById('player-name').value.trim() || 'Steve'; }
     getRoomCode() { return document.getElementById('room-code-input').value.trim().toUpperCase(); }
 
-    onSolo(fn) { document.getElementById('btn-solo').addEventListener('click', (e) => { e.stopPropagation(); fn(); }); }
-    onHost(fn) { document.getElementById('btn-host').addEventListener('click', (e) => { e.stopPropagation(); fn(); }); }
-    onJoin(fn) { document.getElementById('btn-join').addEventListener('click', (e) => { e.stopPropagation(); fn(); }); }
+    onSolo(fn) { document.getElementById('btn-solo').addEventListener('click', () => fn()); }
+    onHost(fn) { document.getElementById('btn-host').addEventListener('click', () => fn()); }
+    onJoin(fn) { document.getElementById('btn-join').addEventListener('click', () => fn()); }
 
     setStatus(msg) { document.getElementById('menu-status').textContent = msg; }
 
@@ -95,8 +105,9 @@ export class UI {
         this.roomInfo.style.display = 'block';
     }
 
-    hideStartScreen() { this.startScreen.style.display = 'none'; }
-    showStartScreen() { this.startScreen.style.display = 'flex'; }
+    hideStartScreen() { this.startScreen.style.display = 'none'; this.pauseScreen.style.display = 'none'; }
+    showStartScreen() { this.startScreen.style.display = 'flex'; this.pauseScreen.style.display = 'none'; }
+    showPauseScreen() { this.startScreen.style.display = 'none'; this.pauseScreen.style.display = 'flex'; }
 
     updateHotbar(hotbar, selectedSlot) {
         for (let i = 0; i < 9; i++) {

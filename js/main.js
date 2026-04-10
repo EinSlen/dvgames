@@ -131,12 +131,10 @@ class Game {
     _startGame(seed, blockChanges) {
         this.world = new World(this.scene, this.material, this.waterMaterial, seed);
 
-        // Wire up network block sync
         if (this.network) {
             this.world.onBlockChange = (x, y, z, type) => this.network.sendBlock(x, y, z, type);
         }
 
-        // Apply initial block changes from host
         if (blockChanges) {
             for (const c of blockChanges) this.world.setBlock(c.x, c.y, c.z, c.bt, true);
         }
@@ -144,7 +142,6 @@ class Game {
         this.player = new Player(this.camera, this.world);
         this.player.spawn();
 
-        // Force-load spawn area
         const scx = Math.floor(this.player.position.x / CHUNK_SIZE);
         const scz = Math.floor(this.player.position.z / CHUNK_SIZE);
         for (let dx = -1; dx <= 1; dx++)
@@ -152,6 +149,11 @@ class Game {
                 this.world.forceLoad(scx + dx, scz + dz);
 
         this._initPointerLock();
+        this.ui.hideStartScreen();
+        this.started = true;
+
+        // Pointer lock will be requested by the document click handler
+        // (the button click event bubbles up to document)
         requestAnimationFrame(this.animate);
     }
 
@@ -215,14 +217,22 @@ class Game {
     }
 
     _initPointerLock() {
+        if (this._pointerLockReady) return; // only bind once
+        this._pointerLockReady = true;
         const canvas = this.renderer.domElement;
+
         document.addEventListener('click', () => {
-            if (!document.pointerLockElement) canvas.requestPointerLock();
+            if (this.started && !document.pointerLockElement) canvas.requestPointerLock();
         });
+
         document.addEventListener('pointerlockchange', () => {
+            if (!this.started) return;
             this.player.locked = document.pointerLockElement === canvas;
             if (this.player.locked) this.ui.hideStartScreen();
-            else this.ui.showStartScreen();
+            else {
+                // Show a minimal "paused" overlay, not the full menu
+                this.ui.showPauseScreen();
+            }
         });
     }
 
