@@ -151,6 +151,80 @@ class Game {
         this.scene.fog = new THREE.Fog(0x87CEEB, 40, 70);
         this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 80);
         // No lights — MeshBasicMaterial doesn't need them
+
+        // Sky message — horizontal plane like cloud writing
+        const skyCanvas = document.createElement('canvas');
+        skyCanvas.width = 2048; skyCanvas.height = 512;
+        const ctx = skyCanvas.getContext('2d');
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Draw hearts scattered around
+        const hearts = [
+            [180, 100, 50], [1850, 120, 45], [350, 400, 40], [1700, 380, 42],
+            [500, 80, 35], [1550, 90, 38], [250, 250, 30], [1800, 270, 32],
+            [900, 70, 28], [1150, 70, 28], [700, 420, 33], [1350, 430, 30],
+        ];
+        for (const [hx, hy, size] of hearts) {
+            ctx.font = size + 'px sans-serif';
+            ctx.fillStyle = 'rgba(255,100,130,0.7)';
+            ctx.shadowColor = 'rgba(255,50,80,0.5)';
+            ctx.shadowBlur = 15;
+            ctx.fillText('\u2764', hx, hy);
+        }
+
+        // Main text with glow
+        ctx.shadowColor = 'rgba(255,120,170,0.9)';
+        ctx.shadowBlur = 40;
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 130px sans-serif';
+        ctx.fillText("\u2764 Je t'aime Vimo \u2764", 1024, 256);
+        // Second pass for stronger glow
+        ctx.shadowColor = 'rgba(255,180,210,0.6)';
+        ctx.shadowBlur = 60;
+        ctx.fillText("\u2764 Je t'aime Vimo \u2764", 1024, 256);
+        // Third pass crisp
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#fff';
+        ctx.fillText("\u2764 Je t'aime Vimo \u2764", 1024, 256);
+
+        const skyTex = new THREE.CanvasTexture(skyCanvas);
+        const skyGeo = new THREE.PlaneGeometry(45, 11);
+        const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, transparent: true, opacity: 0.95, fog: false, depthWrite: false, side: THREE.DoubleSide });
+        this.skyText = new THREE.Mesh(skyGeo, skyMat);
+        this.skyText.rotation.x = Math.PI / 2;
+        this.skyText.renderOrder = 999;
+        this.scene.add(this.skyText);
+
+        // Floating heart particles in the sky
+        this.skyHearts = [];
+        const heartCanvas = document.createElement('canvas');
+        heartCanvas.width = 64; heartCanvas.height = 64;
+        const hctx = heartCanvas.getContext('2d');
+        hctx.font = '50px sans-serif';
+        hctx.textAlign = 'center';
+        hctx.textBaseline = 'middle';
+        hctx.fillStyle = '#ff6688';
+        hctx.shadowColor = 'rgba(255,50,80,0.8)';
+        hctx.shadowBlur = 10;
+        hctx.fillText('\u2764', 32, 32);
+        const heartTex = new THREE.CanvasTexture(heartCanvas);
+
+        for (let i = 0; i < 20; i++) {
+            const heart = new THREE.Sprite(new THREE.SpriteMaterial({ map: heartTex, transparent: true, fog: false, depthWrite: false, opacity: 0.6 + Math.random() * 0.4 }));
+            heart.scale.set(1.2 + Math.random() * 1.5, 1.2 + Math.random() * 1.5, 1);
+            heart.renderOrder = 998;
+            this.scene.add(heart);
+            this.skyHearts.push({
+                sprite: heart,
+                offsetX: (Math.random() - 0.5) * 50,
+                offsetZ: (Math.random() - 0.5) * 50,
+                offsetY: 25 + Math.random() * 20,
+                phase: Math.random() * Math.PI * 2,
+                speed: 0.3 + Math.random() * 0.5,
+                bobAmp: 0.5 + Math.random() * 1.5,
+            });
+        }
     }
 
     _initMaterials() {
@@ -389,6 +463,19 @@ class Game {
         }
 
         this._updateViewmodel(dt);
+
+        // Keep sky text above player like cloud writing
+        this.skyText.position.x = this.player.position.x;
+        this.skyText.position.y = this.player.position.y + 40;
+        this.skyText.position.z = this.player.position.z;
+
+        // Animate floating hearts
+        const t = this.clock.elapsedTime;
+        for (const h of this.skyHearts) {
+            h.sprite.position.x = this.player.position.x + h.offsetX + Math.sin(t * h.speed + h.phase) * 3;
+            h.sprite.position.y = this.player.position.y + h.offsetY + Math.sin(t * h.speed * 1.3 + h.phase) * h.bobAmp;
+            h.sprite.position.z = this.player.position.z + h.offsetZ + Math.cos(t * h.speed + h.phase) * 3;
+        }
 
         this.ui.updateHotbar(this.player.hotbar, this.player.selectedSlot);
 
