@@ -381,7 +381,7 @@ export class MobManager {
         this.world = world;
         this.mobs = [];
         this.spawnTimer = 0;
-        this.maxMobs = 15;
+        this.maxMobs = 8;
     }
 
     spawnVendor(x, y, z) {

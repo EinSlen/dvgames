@@ -54,7 +54,7 @@ export class World {
         this.noise = new SimplexNoise(seed);
         this.treeNoise = new SimplexNoise(seed + 55555);
         this.caveNoise = new SimplexNoise(seed + 11111);
-        this.renderDistance = 4;
+        this.renderDistance = 3;
         this.meshQueue = [];
         this.onBlockChange = null;
         this.pendingRemoteChanges = [];
