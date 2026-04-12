@@ -5,6 +5,7 @@ const MOB_TYPES = {
     GAUFRE: { color: 0xe0c060, darkColor: 0xb89830, bodyW: 0.6, bodyH: 0.15, bodyD: 0.5, legH: 0.25, headSize: 0.3, hp: 4, name: 'Gaufre' },
     CHOCOLAT: { color: 0x4a2a10, darkColor: 0x301808, bodyW: 0.35, bodyH: 0.35, bodyD: 0.35, legH: 0.25, headSize: 0.3, hp: 5, name: 'Chocolat' },
     BIERE: { color: 0xd4a030, darkColor: 0xa07020, bodyW: 0.3, bodyH: 0.5, bodyD: 0.3, legH: 0.2, headSize: 0.2, hp: 4, name: 'Biere' },
+    MOUTON: { color: 0xffffff, darkColor: 0xe0e0e0, bodyW: 0.5, bodyH: 0.4, bodyD: 0.6, legH: 0.25, headSize: 0.28, hp: 4, name: 'Mouton' },
     VENDOR: { color: 0xf0f0f0, darkColor: 0xc00020, bodyW: 0.4, bodyH: 0.6, bodyD: 0.25, legH: 0.35, headSize: 0.35, hp: 100, name: 'Friteur', isVendor: true },
     DARONNE: { color: 0xff69b4, darkColor: 0x8b4513, bodyW: 0.7, bodyH: 0.7, bodyD: 0.6, legH: 0.3, headSize: 0.4, hp: 200, name: 'Daronne', isDaronne: true },
 };
@@ -440,7 +441,7 @@ export class MobManager {
         let type;
         if (r < 0.08) type = MOB_TYPES.DARONNE;
         else {
-            const types = [MOB_TYPES.FRITE, MOB_TYPES.GAUFRE, MOB_TYPES.CHOCOLAT, MOB_TYPES.BIERE];
+            const types = [MOB_TYPES.FRITE, MOB_TYPES.GAUFRE, MOB_TYPES.CHOCOLAT, MOB_TYPES.BIERE, MOB_TYPES.MOUTON];
             type = types[Math.floor(Math.random() * types.length)];
         }
 

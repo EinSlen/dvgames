@@ -188,6 +188,27 @@ class Game {
         ctx.fillStyle = '#fff';
         ctx.fillText("\u2764 Je t'aime Vimo \u2764", 1024, 256);
 
+        // Red strikethrough bar on "Vimo"
+        const vimoMetrics = ctx.measureText("\u2764 Je t'aime Vimo \u2764");
+        const prefixMetrics = ctx.measureText("\u2764 Je t'aime ");
+        const vimoWordMetrics = ctx.measureText("Vimo");
+        const textLeft = 1024 - vimoMetrics.width / 2;
+        const vimoX = textLeft + prefixMetrics.width;
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 12;
+        ctx.shadowBlur = 0;
+        ctx.beginPath();
+        ctx.moveTo(vimoX - 5, 256);
+        ctx.lineTo(vimoX + vimoWordMetrics.width + 5, 256);
+        ctx.stroke();
+
+        // "Arnaud" and "Said" next to the barred text
+        ctx.fillStyle = '#ff4444';
+        ctx.font = 'bold 90px sans-serif';
+        ctx.shadowColor = 'rgba(255,0,0,0.7)';
+        ctx.shadowBlur = 20;
+        ctx.fillText('Arnaud & Said', 1024, 380);
+
         const skyTex = new THREE.CanvasTexture(skyCanvas);
         const skyGeo = new THREE.PlaneGeometry(45, 11);
         const skyMat = new THREE.MeshBasicMaterial({ map: skyTex, transparent: true, opacity: 0.95, fog: false, depthWrite: false, side: THREE.DoubleSide });
